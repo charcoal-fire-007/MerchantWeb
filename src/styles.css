@@ -1,0 +1,288 @@
+:root {
+  --blue: #0052ff;
+  --blue-active: #003ecc;
+  --canvas: #ffffff;
+  --soft: #f7f8fa;
+  --soft-strong: #eef1f5;
+  --ink: #0a0b0d;
+  --body: #5b616e;
+  --muted: #7c828a;
+  --line: #dfe3ea;
+  --green: #087f5b;
+  --amber: #b7791f;
+  --red: #cf202f;
+  --radius: 8px;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--soft);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button, input, textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  min-height: 100vh;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 20px;
+}
+
+h1, h2, p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 520;
+}
+
+h2 {
+  font-size: 17px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--canvas);
+}
+
+.btn {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 650;
+  transition: background 0.15s;
+}
+
+.btn.primary {
+  color: #fff;
+  background: var(--blue);
+}
+
+.btn.primary:hover {
+  background: var(--blue-active);
+}
+
+.btn.outline {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--canvas);
+}
+
+.btn.outline:hover {
+  background: var(--soft-strong);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn.full {
+  width: 100%;
+}
+
+.alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  color: #8a1c1c;
+  border: 1px solid #ffd6d6;
+  border-radius: var(--radius);
+  background: #fff0f0;
+}
+
+input, textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+textarea {
+  min-height: 64px;
+  padding: 8px 12px;
+  resize: vertical;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0, 82, 255, 0.12);
+}
+
+.login-card {
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+  margin-top: 32px;
+}
+
+.login-card p {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  color: var(--body);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.header-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.badge.ok {
+  color: var(--green);
+  background: #e6f4ef;
+}
+
+.badge.warn {
+  color: var(--amber);
+  background: #fff4db;
+}
+
+.badge.danger {
+  color: var(--red);
+  background: #fde8ea;
+}
+
+.product-list {
+  display: grid;
+  gap: 14px;
+}
+
+.product-row {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.product-row:hover {
+  border-color: #cfd6e2;
+  box-shadow: 0 4px 12px rgba(10, 11, 13, 0.04);
+}
+
+.product-main {
+  min-width: 0;
+}
+
+.product-name {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.product-keywords {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.product-keyword-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--body);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  background: var(--soft);
+}
+
+.product-meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.product-side {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.expand-row {
+  padding: 0 18px 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.expand-row label {
+  display: grid;
+  gap: 6px;
+  color: var(--body);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.expand-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.empty {
+  padding: 48px 24px;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  background: var(--canvas);
+}
+
+.empty strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.empty p {
+  font-size: 13px;
+  max-width: 320px;
+  margin: 0 auto;
+  line-height: 1.55;
+}
