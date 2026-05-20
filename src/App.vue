@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { ECharts } from 'echarts/core'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ApiError, api, type LoginResponse, type MerchantNotification, type MerchantNotificationTrendDay, type MerchantProduct } from './api'
 import {
@@ -13,6 +12,22 @@ import { getRecentUnreadNotifications } from './notifications'
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
+
+interface DispatchChartBarSegment {
+  product: string
+  count: number
+  color: string
+  heightPercent: number
+  title: string
+}
+
+interface DispatchChartBar {
+  date: string
+  label: string
+  total: number
+  heightPercent: number
+  segments: DispatchChartBarSegment[]
+}
 
 const AUTH_TOKEN_KEY = 'merchant_token'
 const REMEMBER_DEVICE_KEY = 'merchant_remember_device'
@@ -38,9 +53,6 @@ const localReadNotificationIds = ref<Set<string>>(new Set())
 const highlightedNotificationIds = ref<Set<string>>(new Set())
 const notificationsLoaded = ref(false)
 const newDispatchBurstCount = ref(0)
-const dispatchChartEl = ref<HTMLElement | null>(null)
-const dispatchChartLoading = ref(false)
-const dispatchChartError = ref('')
 const expandingProduct = ref<string | null>(null)
 const pauseForm = reactive({ reason: '' })
 const submittingProduct = ref<string | null>(null)
@@ -90,17 +102,19 @@ const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, notification
 const recentNotifications = computed(() => dashboardNotifications.value.slice(0, 3))
 const hasMoreNotifications = computed(() => dashboardNotifications.value.length > recentNotifications.value.length)
 const dispatchTrendTotal = computed(() => dispatchTrend.value.reduce((total, day) => total + day.dispatch_count, 0))
-const dispatchProductSeries = computed(() => buildDispatchProductSeries())
+const dispatchChartMax = computed(() => Math.max(1, ...dispatchTrend.value.map((day) => day.dispatch_count)))
+const dispatchChartGridLines = computed(() => {
+  const max = dispatchChartMax.value
+  return [max, Math.ceil(max * 0.75), Math.ceil(max * 0.5), Math.ceil(max * 0.25), 0]
+    .filter((value, index, values) => values.indexOf(value) === index)
+})
+const dispatchChartBars = computed(() => buildDispatchChartBars())
 const productSearch = ref('')
 const enabledProductsCollapsed = ref(false)
 const enabledProductsCollapseTouched = ref(false)
 const hasProductSearch = computed(() => productSearch.value.trim().length > 0)
 const isEnabledProductsCollapsed = computed(() => !hasProductSearch.value && enabledProductsCollapsed.value)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
-let dispatchChart: ECharts | null = null
-let echartsModule: typeof import('echarts/core') | null = null
-let dispatchChartRenderFrame: number | null = null
-let dispatchChartRenderRetry = 0
 const dispatchProductColors = [
   '#9fe870',
   '#67e8f9',
@@ -147,27 +161,15 @@ if (isLoggedIn.value) {
   startNotificationsPolling()
 }
 onMounted(() => {
-  window.addEventListener('resize', resizeDispatchTrendChart)
-  scheduleDispatchTrendRender()
   observeProductCards()
 })
 onUnmounted(() => {
   stopNotificationsPolling()
-  window.removeEventListener('resize', resizeDispatchTrendChart)
-  cancelDispatchTrendRender()
-  disposeDispatchTrendChart()
   disconnectProductCardsObserver()
   clearProductCardReturnTimers()
   clearNotificationHighlightTimers()
   stopBulkAvailabilityProgress()
 })
-watch([dispatchTrend, notifications, navActive], () => {
-  if (navActive.value !== 'dashboard') {
-    disposeDispatchTrendChart()
-    return
-  }
-  scheduleDispatchTrendRender()
-}, { deep: true })
 watch([filteredEnabled, filteredDisabled, navActive], () => {
   void nextTick(observeProductCards)
 })
@@ -564,7 +566,7 @@ function normalizeProductName(value: string | null | undefined) {
   return product || '未标记商品'
 }
 
-function buildDispatchProductSeries() {
+function buildDispatchChartBars(): DispatchChartBar[] {
   const trendDates = dispatchTrend.value.map((day) => day.date)
   const trendDateSet = new Set(trendDates)
   const countsByProduct = new Map<string, Map<string, number>>()
@@ -596,131 +598,23 @@ function buildDispatchProductSeries() {
     }
   }
 
-  return productOrder.map((product, index) => ({
-    name: product,
-    type: 'bar' as const,
-    stack: 'dispatch-product',
-    data: trendDates.map((date) => countsByProduct.get(product)?.get(date) || 0),
-    barMaxWidth: 30,
-    emphasis: { focus: 'none' as const, disabled: true },
-    itemStyle: {
-      color: dispatchProductColors[index % dispatchProductColors.length],
-      borderRadius: 0,
-      borderWidth: 0,
-    },
+  const max = dispatchChartMax.value
+  return dispatchTrend.value.map((day) => ({
+    date: day.date,
+    label: formatDateLabel(day.date),
+    total: day.dispatch_count,
+    heightPercent: day.dispatch_count > 0 ? (day.dispatch_count / max) * 100 : 0,
+    segments: productOrder.map((product, index) => {
+      const count = countsByProduct.get(product)?.get(day.date) || 0
+      return {
+        product,
+        count,
+        color: dispatchProductColors[index % dispatchProductColors.length],
+        heightPercent: day.dispatch_count > 0 ? (count / day.dispatch_count) * 100 : 0,
+        title: `${product}：${count} 单`,
+      }
+    }).filter((segment) => segment.count > 0),
   }))
-}
-
-function resizeDispatchTrendChart() {
-  dispatchChart?.resize()
-}
-
-function cancelDispatchTrendRender() {
-  if (dispatchChartRenderFrame !== null) {
-    cancelAnimationFrame(dispatchChartRenderFrame)
-    dispatchChartRenderFrame = null
-  }
-}
-
-function disposeDispatchTrendChart() {
-  dispatchChart?.dispose()
-  dispatchChart = null
-}
-
-function scheduleDispatchTrendRender(resetRetry = true) {
-  if (resetRetry) {
-    dispatchChartRenderRetry = 0
-  }
-  cancelDispatchTrendRender()
-  dispatchChartRenderFrame = requestAnimationFrame(() => {
-    dispatchChartRenderFrame = null
-    void nextTick(renderDispatchTrendChart)
-  })
-}
-
-async function ensureEcharts() {
-  if (echartsModule) {
-    return echartsModule
-  }
-
-  dispatchChartLoading.value = true
-  dispatchChartError.value = ''
-  try {
-    const [echartsCore, charts, components, renderers] = await Promise.all([
-      import('echarts/core'),
-      import('echarts/charts'),
-      import('echarts/components'),
-      import('echarts/renderers'),
-    ])
-    echartsCore.use([
-      charts.BarChart,
-      components.GridComponent,
-      components.TooltipComponent,
-      renderers.CanvasRenderer,
-    ])
-    echartsModule = echartsCore
-    return echartsModule
-  } catch {
-    dispatchChartError.value = '图表加载失败，请刷新页面重试'
-    return null
-  } finally {
-    dispatchChartLoading.value = false
-  }
-}
-
-async function renderDispatchTrendChart() {
-  if (navActive.value !== 'dashboard' || !dispatchChartEl.value) {
-    return
-  }
-  if (dispatchChartEl.value.clientWidth <= 0) {
-    if (dispatchChartRenderRetry < 10) {
-      dispatchChartRenderRetry += 1
-      scheduleDispatchTrendRender(false)
-    }
-    return
-  }
-  const echarts = await ensureEcharts()
-  if (!echarts) {
-    return
-  }
-  if (dispatchChart && dispatchChart.getDom() !== dispatchChartEl.value) {
-    disposeDispatchTrendChart()
-  }
-  if (!dispatchChart) {
-    dispatchChart = echarts.init(dispatchChartEl.value)
-  }
-  const chart = dispatchChart
-  dispatchChartRenderRetry = 0
-
-  const labels = dispatchTrend.value.map((day) => formatDateLabel(day.date))
-  chart.setOption({
-    animation: true,
-    animationDuration: 600,
-    animationEasing: 'linear',
-    grid: { left: 38, right: 18, top: 24, bottom: 28 },
-    tooltip: {
-      trigger: 'item',
-      formatter: (params: unknown) => {
-        const item = params as { name?: string; seriesName?: string; value?: number | string }
-        return `${item.name || ''}<br/>${item.seriesName || '商品'}：${Number(item.value) || 0} 单`
-      },
-    },
-    xAxis: {
-      type: 'category',
-      data: labels,
-      axisTick: { show: false },
-      axisLine: { lineStyle: { color: '#d8ddd5' } },
-      axisLabel: { color: '#868685', fontSize: 11 },
-    },
-    yAxis: {
-      type: 'value',
-      minInterval: 1,
-      splitLine: { lineStyle: { color: '#edf0eb' } },
-      axisLabel: { color: '#868685', fontSize: 11 },
-    },
-    series: dispatchProductSeries.value,
-  })
-  chart.resize()
 }
 
 function toggleExpand(ruleId: string) {
@@ -1292,10 +1186,32 @@ async function run(task: () => Promise<void>) {
               </div>
               <button class="btn btn-ghost" @click="goToNotifications">查看明细</button>
             </div>
-            <div v-if="dispatchChartError" class="notif-empty">{{ dispatchChartError }}</div>
-            <div v-else-if="dispatchChartLoading" class="notif-empty">图表加载中...</div>
-            <div v-else-if="dispatchTrendTotal === 0" class="notif-empty">近 7 天暂无派单数据</div>
-            <div ref="dispatchChartEl" class="dispatch-chart" :class="{ muted: dispatchTrendTotal === 0 || dispatchChartLoading }"></div>
+            <div v-if="dispatchTrendTotal === 0" class="notif-empty">近 7 天暂无派单数据</div>
+            <div v-else class="dispatch-native-chart" role="img" aria-label="近 7 天派单趋势">
+              <div class="dispatch-chart-plot">
+                <div class="dispatch-chart-grid" aria-hidden="true">
+                  <div v-for="line in dispatchChartGridLines" :key="line" class="dispatch-chart-grid-line">
+                    <span>{{ line }}</span>
+                  </div>
+                </div>
+                <div class="dispatch-chart-bars">
+                  <div v-for="bar in dispatchChartBars" :key="bar.date" class="dispatch-bar-group">
+                    <div class="dispatch-bar-track">
+                      <div class="dispatch-bar-stack" :style="{ height: `${bar.heightPercent}%` }">
+                        <span
+                          v-for="segment in bar.segments"
+                          :key="`${bar.date}-${segment.product}`"
+                          class="dispatch-bar-segment"
+                          :title="segment.title"
+                          :style="{ height: `${segment.heightPercent}%`, background: segment.color }"
+                        ></span>
+                      </div>
+                    </div>
+                    <div class="dispatch-bar-label">{{ bar.label }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
 

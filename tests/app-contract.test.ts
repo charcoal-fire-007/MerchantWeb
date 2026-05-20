@@ -5,6 +5,7 @@ import test from 'node:test'
 
 const appSource = fs.readFileSync(path.join(process.cwd(), 'src', 'App.vue'), 'utf8')
 const cssSource = fs.readFileSync(path.join(process.cwd(), 'src', 'styles.css'), 'utf8')
+const packageSource = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
 const splitRevealPath = path.join(process.cwd(), 'src', 'components', 'SplitRevealText.vue')
 const splitRevealSource = fs.existsSync(splitRevealPath) ? fs.readFileSync(splitRevealPath, 'utf8') : ''
 const gridDistortionPath = path.join(process.cwd(), 'src', 'components', 'GridDistortion.vue')
@@ -232,25 +233,15 @@ test('dashboard today stat uses api total order wording', () => {
   assert.doesNotMatch(appSource, /<div class="stat-sub">等待派单分配<\/div>/)
 })
 
-test('dashboard renders echarts dispatch trend and limits notification preview', () => {
-  assert.doesNotMatch(appSource, /from 'echarts\/charts'/)
-  assert.doesNotMatch(appSource, /from 'echarts\/components'/)
-  assert.doesNotMatch(appSource, /from 'echarts\/renderers'/)
-  assert.match(appSource, /function ensureEcharts\(\)/)
-  assert.match(appSource, /import\('echarts\/core'\)/)
-  assert.match(appSource, /import\('echarts\/charts'\)/)
-  assert.match(appSource, /import\('echarts\/components'\)/)
-  assert.match(appSource, /import\('echarts\/renderers'\)/)
-  assert.match(appSource, /const dispatchChartLoading = ref\(false\)/)
-  assert.match(appSource, /const dispatchChartError = ref\(''\)/)
-  assert.match(appSource, /图表加载中/)
-  assert.match(appSource, /图表加载失败，请刷新页面重试/)
-  assert.match(appSource, /ref="dispatchChartEl"/)
-  assert.match(appSource, /renderDispatchTrendChart/)
-  assert.match(appSource, /scheduleDispatchTrendRender/)
-  assert.match(appSource, /requestAnimationFrame/)
-  assert.match(appSource, /dispatchChartEl\.value\.clientWidth/)
-  assert.match(appSource, /chart\.resize\(\)/)
+test('dashboard renders native dispatch trend without loading chart libraries', () => {
+  assert.doesNotMatch(appSource, /echarts/)
+  assert.doesNotMatch(packageSource, /"echarts"/)
+  assert.match(appSource, /const dispatchChartBars = computed\(\(\) => buildDispatchChartBars\(\)\)/)
+  assert.match(appSource, /function buildDispatchChartBars\(\)/)
+  assert.match(appSource, /class="dispatch-native-chart"/)
+  assert.match(appSource, /class="dispatch-bar-segment"/)
+  assert.match(appSource, /class="dispatch-chart-grid-line"/)
+  assert.doesNotMatch(appSource, /图表加载中/)
   assert.match(appSource, /recentNotifications = computed\(\(\) => dashboardNotifications\.value\.slice\(0,\s*3\)\)/)
   assert.match(appSource, /newDispatchBurstCount\s*>\s*3/)
   assert.match(appSource, /goToNotifications/)
@@ -316,26 +307,15 @@ test('dashboard cards use scroll-triggered animated content effect without gsap'
 })
 
 test('dashboard dispatch chart stacks dispatch counts by product without machine line', () => {
-  assert.match(appSource, /buildDispatchProductSeries/)
-  assert.match(appSource, /const dispatchProductSeries = computed/)
-  assert.match(appSource, /stack:\s*'dispatch-product'/)
-  assert.match(appSource, /trigger:\s*'item'/)
-  assert.match(appSource, /seriesName/)
+  assert.match(appSource, /buildDispatchChartBars/)
+  assert.match(appSource, /segments:\s*productOrder\.map/)
+  assert.match(appSource, /title:\s*`\$\{product\}：\$\{count\} 单`/)
   assert.match(appSource, /notifications\.value/)
   assert.doesNotMatch(appSource, /focus:\s*'series'/)
-  assert.match(appSource, /emphasis:\s*\{[^}]*focus:\s*'none'[^}]*disabled:\s*true/)
-  assert.match(appSource, /borderRadius:\s*0/)
-  assert.match(appSource, /borderWidth:\s*0/)
+  assert.doesNotMatch(appSource, /stack:\s*'dispatch-product'/)
   assert.doesNotMatch(appSource, /borderRadius:\s*\[6,\s*6,\s*0,\s*0\]/)
   assert.doesNotMatch(appSource, /charts\.LineChart/)
   assert.doesNotMatch(appSource, /day\.machine_count/)
-})
-
-test('dashboard dispatch chart recreates echarts instance after tab remount', () => {
-  assert.match(appSource, /function disposeDispatchTrendChart/)
-  assert.match(appSource, /dispatchChart\.getDom\(\)\s*!==\s*dispatchChartEl\.value/)
-  assert.match(appSource, /disposeDispatchTrendChart\(\)/)
-  assert.match(appSource, /if\s*\(navActive\.value !== 'dashboard'\)[\s\S]*disposeDispatchTrendChart\(\)/)
 })
 
 test('notifications page renders concise dispatch record fields with detailed time', () => {
