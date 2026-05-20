@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { ECharts } from 'echarts/core'
+import { init, use } from 'echarts/core'
+import { BarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ApiError, api, type LoginResponse, type MerchantNotification, type MerchantNotificationTrendDay, type MerchantProduct } from './api'
 import {
@@ -10,6 +14,8 @@ import {
 } from './auth'
 import SplitRevealText from './components/SplitRevealText.vue'
 import { getRecentUnreadNotifications } from './notifications'
+
+use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
@@ -96,7 +102,6 @@ const hasProductSearch = computed(() => productSearch.value.trim().length > 0)
 const isEnabledProductsCollapsed = computed(() => !hasProductSearch.value && enabledProductsCollapsed.value)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
 let dispatchChart: ECharts | null = null
-let echartsModule: typeof import('echarts/core') | null = null
 let dispatchChartRenderFrame: number | null = null
 let dispatchChartRenderRetry = 0
 const dispatchProductColors = [
@@ -636,28 +641,7 @@ function scheduleDispatchTrendRender(resetRetry = true) {
   })
 }
 
-async function ensureEcharts() {
-  if (echartsModule) {
-    return echartsModule
-  }
-
-  const [echartsCore, charts, components, renderers] = await Promise.all([
-    import('echarts/core'),
-    import('echarts/charts'),
-    import('echarts/components'),
-    import('echarts/renderers'),
-  ])
-  echartsCore.use([
-    charts.BarChart,
-    components.GridComponent,
-    components.TooltipComponent,
-    renderers.CanvasRenderer,
-  ])
-  echartsModule = echartsCore
-  return echartsCore
-}
-
-async function renderDispatchTrendChart() {
+function renderDispatchTrendChart() {
   if (navActive.value !== 'dashboard' || !dispatchChartEl.value) {
     return
   }
@@ -668,12 +652,11 @@ async function renderDispatchTrendChart() {
     }
     return
   }
-  const echarts = await ensureEcharts()
   if (dispatchChart && dispatchChart.getDom() !== dispatchChartEl.value) {
     disposeDispatchTrendChart()
   }
   if (!dispatchChart) {
-    dispatchChart = echarts.init(dispatchChartEl.value)
+    dispatchChart = init(dispatchChartEl.value)
   }
   dispatchChartRenderRetry = 0
 

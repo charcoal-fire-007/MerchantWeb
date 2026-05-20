@@ -233,8 +233,13 @@ test('dashboard today stat uses api total order wording', () => {
 })
 
 test('dashboard renders echarts dispatch trend and limits notification preview', () => {
-  assert.match(appSource, /import\('echarts\/core'\)/)
-  assert.match(appSource, /echartsCore\.use\(\[/)
+  assert.match(appSource, /import\s+\{\s*init,\s*use\s*\}\s+from 'echarts\/core'/)
+  assert.match(appSource, /import\s+\{\s*BarChart\s*\}\s+from 'echarts\/charts'/)
+  assert.match(appSource, /import\s+\{\s*GridComponent,\s*TooltipComponent\s*\}\s+from 'echarts\/components'/)
+  assert.match(appSource, /import\s+\{\s*CanvasRenderer\s*\}\s+from 'echarts\/renderers'/)
+  assert.match(appSource, /use\(\[BarChart,\s*GridComponent,\s*TooltipComponent,\s*CanvasRenderer\]\)/)
+  assert.doesNotMatch(appSource, /import\('echarts\//)
+  assert.doesNotMatch(appSource, /ensureEcharts/)
   assert.match(appSource, /ref="dispatchChartEl"/)
   assert.match(appSource, /renderDispatchTrendChart/)
   assert.match(appSource, /scheduleDispatchTrendRender/)
