@@ -1,9 +1,5 @@
 <script setup lang="ts">
 import type { ECharts } from 'echarts/core'
-import { init, use } from 'echarts/core'
-import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ApiError, api, type LoginResponse, type MerchantNotification, type MerchantNotificationTrendDay, type MerchantProduct } from './api'
 import {
@@ -14,8 +10,6 @@ import {
 } from './auth'
 import SplitRevealText from './components/SplitRevealText.vue'
 import { getRecentUnreadNotifications } from './notifications'
-
-use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
@@ -45,6 +39,8 @@ const highlightedNotificationIds = ref<Set<string>>(new Set())
 const notificationsLoaded = ref(false)
 const newDispatchBurstCount = ref(0)
 const dispatchChartEl = ref<HTMLElement | null>(null)
+const dispatchChartLoading = ref(false)
+const dispatchChartError = ref('')
 const expandingProduct = ref<string | null>(null)
 const pauseForm = reactive({ reason: '' })
 const submittingProduct = ref<string | null>(null)
@@ -102,6 +98,7 @@ const hasProductSearch = computed(() => productSearch.value.trim().length > 0)
 const isEnabledProductsCollapsed = computed(() => !hasProductSearch.value && enabledProductsCollapsed.value)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
 let dispatchChart: ECharts | null = null
+let echartsModule: typeof import('echarts/core') | null = null
 let dispatchChartRenderFrame: number | null = null
 let dispatchChartRenderRetry = 0
 const dispatchProductColors = [
@@ -641,7 +638,37 @@ function scheduleDispatchTrendRender(resetRetry = true) {
   })
 }
 
-function renderDispatchTrendChart() {
+async function ensureEcharts() {
+  if (echartsModule) {
+    return echartsModule
+  }
+
+  dispatchChartLoading.value = true
+  dispatchChartError.value = ''
+  try {
+    const [echartsCore, charts, components, renderers] = await Promise.all([
+      import('echarts/core'),
+      import('echarts/charts'),
+      import('echarts/components'),
+      import('echarts/renderers'),
+    ])
+    echartsCore.use([
+      charts.BarChart,
+      components.GridComponent,
+      components.TooltipComponent,
+      renderers.CanvasRenderer,
+    ])
+    echartsModule = echartsCore
+    return echartsModule
+  } catch {
+    dispatchChartError.value = '图表加载失败，请刷新页面重试'
+    return null
+  } finally {
+    dispatchChartLoading.value = false
+  }
+}
+
+async function renderDispatchTrendChart() {
   if (navActive.value !== 'dashboard' || !dispatchChartEl.value) {
     return
   }
@@ -652,16 +679,21 @@ function renderDispatchTrendChart() {
     }
     return
   }
+  const echarts = await ensureEcharts()
+  if (!echarts) {
+    return
+  }
   if (dispatchChart && dispatchChart.getDom() !== dispatchChartEl.value) {
     disposeDispatchTrendChart()
   }
   if (!dispatchChart) {
-    dispatchChart = init(dispatchChartEl.value)
+    dispatchChart = echarts.init(dispatchChartEl.value)
   }
+  const chart = dispatchChart
   dispatchChartRenderRetry = 0
 
   const labels = dispatchTrend.value.map((day) => formatDateLabel(day.date))
-  dispatchChart.setOption({
+  chart.setOption({
     animation: true,
     animationDuration: 600,
     animationEasing: 'linear',
@@ -688,7 +720,7 @@ function renderDispatchTrendChart() {
     },
     series: dispatchProductSeries.value,
   })
-  dispatchChart.resize()
+  chart.resize()
 }
 
 function toggleExpand(ruleId: string) {
@@ -1260,8 +1292,10 @@ async function run(task: () => Promise<void>) {
               </div>
               <button class="btn btn-ghost" @click="goToNotifications">查看明细</button>
             </div>
-            <div v-if="dispatchTrendTotal === 0" class="notif-empty">近 7 天暂无派单数据</div>
-            <div ref="dispatchChartEl" class="dispatch-chart" :class="{ muted: dispatchTrendTotal === 0 }"></div>
+            <div v-if="dispatchChartError" class="notif-empty">{{ dispatchChartError }}</div>
+            <div v-else-if="dispatchChartLoading" class="notif-empty">图表加载中...</div>
+            <div v-else-if="dispatchTrendTotal === 0" class="notif-empty">近 7 天暂无派单数据</div>
+            <div ref="dispatchChartEl" class="dispatch-chart" :class="{ muted: dispatchTrendTotal === 0 || dispatchChartLoading }"></div>
           </div>
         </template>
 
