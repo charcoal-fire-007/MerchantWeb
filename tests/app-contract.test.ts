@@ -318,6 +318,21 @@ test('dashboard dispatch chart stacks dispatch counts by product without machine
   assert.doesNotMatch(appSource, /day\.machine_count/)
 })
 
+test('dashboard dispatch chart shows custom tooltip on mouse hover and mobile tap', () => {
+  assert.match(appSource, /const dispatchChartTooltip = reactive/)
+  assert.match(appSource, /function showDispatchChartTooltip\(/)
+  assert.match(appSource, /function hideDispatchChartTooltip\(\)/)
+  assert.match(appSource, /@pointerenter="showDispatchChartTooltip\(\$event, segment, bar\)"/)
+  assert.match(appSource, /@pointermove="showDispatchChartTooltip\(\$event, segment, bar\)"/)
+  assert.match(appSource, /@click\.stop="showDispatchChartTooltip\(\$event, segment, bar\)"/)
+  assert.match(appSource, /class="dispatch-chart-tooltip"/)
+  assert.match(appSource, /dispatchChartTooltip\.product/)
+  assert.match(appSource, /dispatchChartTooltip\.count/)
+  assert.doesNotMatch(appSource, /:title="segment\.title"/)
+  assert.doesNotMatch(cssSource, /cursor:\s*help/)
+  assert.match(cssSource, /\.dispatch-chart-tooltip\s*\{/)
+})
+
 test('notifications page renders concise dispatch record fields with detailed time', () => {
   for (const label of ['时间', '商品', '订单号', '订单标题']) {
     assert.match(appSource, new RegExp(label))

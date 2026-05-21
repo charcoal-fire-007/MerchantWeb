@@ -53,6 +53,14 @@ const localReadNotificationIds = ref<Set<string>>(new Set())
 const highlightedNotificationIds = ref<Set<string>>(new Set())
 const notificationsLoaded = ref(false)
 const newDispatchBurstCount = ref(0)
+const dispatchChartTooltip = reactive({
+  visible: false,
+  product: '',
+  date: '',
+  count: 0,
+  x: 0,
+  y: 0,
+})
 const expandingProduct = ref<string | null>(null)
 const pauseForm = reactive({ reason: '' })
 const submittingProduct = ref<string | null>(null)
@@ -615,6 +623,41 @@ function buildDispatchChartBars(): DispatchChartBar[] {
       }
     }).filter((segment) => segment.count > 0),
   }))
+}
+
+function showDispatchChartTooltip(event: Event, segment: DispatchChartBarSegment, bar: DispatchChartBar) {
+  const target = event.currentTarget as HTMLElement | null
+  const chart = target?.closest('.dispatch-native-chart') as HTMLElement | null
+  const chartRect = chart?.getBoundingClientRect()
+  const targetRect = target?.getBoundingClientRect()
+  const pointerEvent = event as PointerEvent
+  let x = targetRect ? targetRect.left + targetRect.width / 2 : 0
+  let y = targetRect ? targetRect.top : 0
+
+  if (typeof pointerEvent.clientX === 'number' && pointerEvent.clientX > 0) {
+    x = pointerEvent.clientX
+    y = pointerEvent.clientY
+  }
+
+  if (chartRect) {
+    const horizontalPadding = 76
+    const minX = Math.min(horizontalPadding, chartRect.width / 2)
+    const maxX = Math.max(minX, chartRect.width - horizontalPadding)
+    dispatchChartTooltip.x = Math.min(Math.max(x - chartRect.left, minX), maxX)
+    dispatchChartTooltip.y = Math.max(y - chartRect.top, 28)
+  } else {
+    dispatchChartTooltip.x = x
+    dispatchChartTooltip.y = y
+  }
+
+  dispatchChartTooltip.product = segment.product
+  dispatchChartTooltip.date = bar.label
+  dispatchChartTooltip.count = segment.count
+  dispatchChartTooltip.visible = true
+}
+
+function hideDispatchChartTooltip() {
+  dispatchChartTooltip.visible = false
 }
 
 function toggleExpand(ruleId: string) {
@@ -1187,7 +1230,14 @@ async function run(task: () => Promise<void>) {
               <button class="btn btn-ghost" @click="goToNotifications">查看明细</button>
             </div>
             <div v-if="dispatchTrendTotal === 0" class="notif-empty">近 7 天暂无派单数据</div>
-            <div v-else class="dispatch-native-chart" role="img" aria-label="近 7 天派单趋势">
+            <div
+              v-else
+              class="dispatch-native-chart"
+              role="img"
+              aria-label="近 7 天派单趋势"
+              @pointerleave="hideDispatchChartTooltip"
+              @click.self="hideDispatchChartTooltip"
+            >
               <div class="dispatch-chart-plot">
                 <div class="dispatch-chart-grid" aria-hidden="true">
                   <div v-for="line in dispatchChartGridLines" :key="line" class="dispatch-chart-grid-line">
@@ -1202,14 +1252,29 @@ async function run(task: () => Promise<void>) {
                           v-for="segment in bar.segments"
                           :key="`${bar.date}-${segment.product}`"
                           class="dispatch-bar-segment"
-                          :title="segment.title"
+                          role="button"
+                          tabindex="0"
+                          :aria-label="segment.title"
                           :style="{ height: `${segment.heightPercent}%`, background: segment.color }"
+                          @pointerenter="showDispatchChartTooltip($event, segment, bar)"
+                          @pointermove="showDispatchChartTooltip($event, segment, bar)"
+                          @focus="showDispatchChartTooltip($event, segment, bar)"
+                          @blur="hideDispatchChartTooltip"
+                          @click.stop="showDispatchChartTooltip($event, segment, bar)"
                         ></span>
                       </div>
                     </div>
                     <div class="dispatch-bar-label">{{ bar.label }}</div>
                   </div>
                 </div>
+              </div>
+              <div
+                v-if="dispatchChartTooltip.visible"
+                class="dispatch-chart-tooltip"
+                :style="{ left: `${dispatchChartTooltip.x}px`, top: `${dispatchChartTooltip.y}px` }"
+              >
+                <strong>{{ dispatchChartTooltip.product }}</strong>
+                <span>{{ dispatchChartTooltip.date }} · {{ dispatchChartTooltip.count }} 单</span>
               </div>
             </div>
           </div>
