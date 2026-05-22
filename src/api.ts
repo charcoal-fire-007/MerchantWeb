@@ -58,6 +58,43 @@ export interface MerchantNotificationsResponse {
   chart: MerchantNotificationTrendDay[]
 }
 
+export type MerchantFeedbackType = 'issue' | 'price_suggestion'
+export type MerchantFeedbackStatus = 'submitted' | 'processing' | 'resolved'
+export type MerchantIssueType = 'page' | 'dispatch' | 'product' | 'account' | 'other'
+export type MerchantPriceIssueType = 'too_high' | 'too_low' | 'wrong_model' | 'other'
+
+export interface MerchantFeedbackRecord {
+  id: string
+  type: MerchantFeedbackType
+  status: MerchantFeedbackStatus
+  product?: string | null
+  rule_id?: string | null
+  issue_type?: MerchantIssueType | null
+  price_issue_type?: MerchantPriceIssueType | null
+  price_per_day?: number | null
+  description?: string | null
+  reason?: string | null
+  contact?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface MerchantFeedbackListResponse {
+  items: MerchantFeedbackRecord[]
+}
+
+export interface MerchantFeedbackPayload {
+  type: MerchantFeedbackType
+  product?: string | null
+  rule_id?: string | null
+  issue_type?: MerchantIssueType | null
+  price_issue_type?: MerchantPriceIssueType | null
+  price_per_day?: number | null
+  description?: string | null
+  reason?: string | null
+  contact?: string | null
+}
+
 export interface CurrentMerchantResponse {
   subject?: string
   username?: string
@@ -214,6 +251,17 @@ export class ApiClient {
 
   async listNotifications(limit = 20): Promise<MerchantNotificationsResponse> {
     return this.request<MerchantNotificationsResponse>(`/api/merchant/notifications?limit=${encodeURIComponent(limit)}`)
+  }
+
+  async listFeedback(): Promise<MerchantFeedbackListResponse> {
+    return this.request<MerchantFeedbackListResponse>('/api/merchant/feedback')
+  }
+
+  async submitFeedback(payload: MerchantFeedbackPayload): Promise<MerchantFeedbackRecord> {
+    return this.request<MerchantFeedbackRecord>('/api/merchant/feedback', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
   }
 
   async getCurrentMerchant(): Promise<CurrentMerchantResponse> {

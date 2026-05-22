@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { ApiError, api, type LoginResponse, type MerchantNotification, type MerchantNotificationTrendDay, type MerchantProduct } from './api'
+import {
+  ApiError,
+  api,
+  type LoginResponse,
+  type MerchantFeedbackRecord,
+  type MerchantFeedbackType,
+  type MerchantIssueType,
+  type MerchantNotification,
+  type MerchantNotificationTrendDay,
+  type MerchantPriceIssueType,
+  type MerchantProduct,
+} from './api'
 import {
   decodeTokenClaims,
   extractMerchantSession,
@@ -61,6 +72,25 @@ const dispatchChartTooltip = reactive({
   x: 0,
   y: 0,
 })
+const feedbackRecords = ref<MerchantFeedbackRecord[]>([])
+const feedbackMode = ref<MerchantFeedbackType>('issue')
+const feedbackLoading = ref(false)
+const feedbackSubmitting = ref(false)
+const feedbackNotice = ref('')
+const feedbackError = ref('')
+const issueFeedbackForm = reactive({
+  issueType: 'page' as MerchantIssueType,
+  description: '',
+  contact: '',
+})
+const priceFeedbackForm = reactive({
+  product: '',
+  ruleId: '',
+  priceIssueType: 'too_high' as MerchantPriceIssueType,
+  pricePerDay: '',
+  reason: '',
+  contact: '',
+})
 const expandingProduct = ref<string | null>(null)
 const pauseForm = reactive({ reason: '' })
 const submittingProduct = ref<string | null>(null)
@@ -106,7 +136,7 @@ const dashboardNotifications = computed(() => getRecentUnreadNotifications(
   { localReadIds: localReadNotificationIds.value },
 ))
 const navUnreadCount = computed(() => navActive.value === 'notifications' ? 0 : dashboardNotifications.value.length)
-const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, notifications: 2 }[navActive.value] ?? 0))
+const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, notifications: 2, feedback: 3 }[navActive.value] ?? 0))
 const recentNotifications = computed(() => dashboardNotifications.value.slice(0, 3))
 const hasMoreNotifications = computed(() => dashboardNotifications.value.length > recentNotifications.value.length)
 const dispatchTrendTotal = computed(() => dispatchTrend.value.reduce((total, day) => total + day.dispatch_count, 0))
@@ -143,6 +173,15 @@ const filteredDisabled = computed(() => {
   const kw = productSearch.value.trim().toLowerCase()
   if (!kw) return disabledProducts.value
   return disabledProducts.value.filter((p) => p.product.toLowerCase().includes(kw))
+})
+const feedbackProductOptions = computed(() => {
+  const seen = new Set<string>()
+  return products.value.filter((product) => {
+    const name = product.product.trim()
+    if (!name || seen.has(name)) return false
+    seen.add(name)
+    return true
+  })
 })
 
 if (tokenClaims.value?.password_reset === true) {
@@ -192,6 +231,11 @@ watch([disabledProducts, productSearch], () => {
 watch(isEnabledProductsCollapsed, () => {
   if (!isEnabledProductsCollapsed.value) {
     void nextTick(observeProductCards)
+  }
+})
+watch(navActive, () => {
+  if (navActive.value === 'feedback') {
+    void refreshFeedbackRecords()
   }
 })
 
@@ -488,6 +532,128 @@ function goToNotifications() {
   markDashboardNotificationsRead()
   navActive.value = 'notifications'
   newDispatchBurstCount.value = 0
+}
+
+function goToFeedback(mode: MerchantFeedbackType = 'issue') {
+  feedbackMode.value = mode
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  navActive.value = 'feedback'
+  void refreshFeedbackRecords()
+}
+
+function goToPriceFeedback(product: MerchantProduct) {
+  feedbackMode.value = 'price_suggestion'
+  priceFeedbackForm.product = product.product
+  priceFeedbackForm.ruleId = product.rule_id
+  priceFeedbackForm.priceIssueType = 'too_high'
+  priceFeedbackForm.pricePerDay = ''
+  priceFeedbackForm.reason = ''
+  priceFeedbackForm.contact = priceFeedbackForm.contact || accountLabel.value
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  navActive.value = 'feedback'
+  void refreshFeedbackRecords()
+}
+
+function syncPriceFeedbackRuleId() {
+  const selected = products.value.find((product) => product.product === priceFeedbackForm.product)
+  priceFeedbackForm.ruleId = selected?.rule_id || ''
+}
+
+async function refreshFeedbackRecords() {
+  if (!isLoggedIn.value) return
+  feedbackLoading.value = true
+  try {
+    const result = await api.listFeedback()
+    feedbackRecords.value = result.items || []
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return
+    feedbackError.value = err instanceof Error ? err.message : '反馈记录加载失败'
+  } finally {
+    feedbackLoading.value = false
+  }
+}
+
+async function submitIssueFeedback() {
+  const description = issueFeedbackForm.description.trim()
+  if (!description) {
+    feedbackError.value = '请先填写问题描述'
+    return
+  }
+  feedbackSubmitting.value = true
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  try {
+    const record = await api.submitFeedback({
+      type: 'issue',
+      issue_type: issueFeedbackForm.issueType,
+      description,
+      contact: issueFeedbackForm.contact.trim() || accountLabel.value,
+    })
+    feedbackRecords.value = [record, ...feedbackRecords.value.filter((item) => item.id !== record.id)]
+    issueFeedbackForm.description = ''
+    feedbackNotice.value = '问题反馈已提交'
+  } catch (err) {
+    feedbackError.value = err instanceof Error ? err.message : '反馈提交失败'
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
+
+async function submitPriceFeedback() {
+  const product = priceFeedbackForm.product.trim()
+  const pricePerDay = Number(priceFeedbackForm.pricePerDay)
+  if (!product) {
+    feedbackError.value = '请先选择商品'
+    return
+  }
+  if (!Number.isFinite(pricePerDay) || pricePerDay <= 0) {
+    feedbackError.value = '请填写有效的建议价格'
+    return
+  }
+  feedbackSubmitting.value = true
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  try {
+    const record = await api.submitFeedback({
+      type: 'price_suggestion',
+      product,
+      rule_id: priceFeedbackForm.ruleId || null,
+      price_issue_type: priceFeedbackForm.priceIssueType,
+      price_per_day: Number(priceFeedbackForm.pricePerDay),
+      reason: priceFeedbackForm.reason.trim() || null,
+      contact: priceFeedbackForm.contact.trim() || accountLabel.value,
+    })
+    feedbackRecords.value = [record, ...feedbackRecords.value.filter((item) => item.id !== record.id)]
+    priceFeedbackForm.pricePerDay = ''
+    priceFeedbackForm.reason = ''
+    feedbackNotice.value = '价格建议已提交'
+  } catch (err) {
+    feedbackError.value = err instanceof Error ? err.message : '反馈提交失败'
+  } finally {
+    feedbackSubmitting.value = false
+  }
+}
+
+function feedbackStatusText(status: string) {
+  return ({
+    submitted: '已提交',
+    processing: '处理中',
+    resolved: '已处理',
+  } as Record<string, string>)[status] || '已提交'
+}
+
+function feedbackTypeText(type: string) {
+  return type === 'price_suggestion' ? '机器价格推荐反馈' : '问题反馈'
+}
+
+function feedbackSummary(record: MerchantFeedbackRecord) {
+  if (record.type === 'price_suggestion') {
+    const price = record.price_per_day ? ` · ${record.price_per_day} 元/天` : ''
+    return `${record.product || '未选择商品'}${price}`
+  }
+  return record.description || record.reason || '暂无描述'
 }
 
 function markDashboardNotificationsRead() {
@@ -961,6 +1127,10 @@ async function run(task: () => Promise<void>) {
             {{ navUnreadCount > 99 ? '99+' : navUnreadCount }}
           </span>
         </button>
+        <button :class="{ active: navActive === 'feedback' }" @click="goToFeedback()">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
+          反馈
+        </button>
       </nav>
       <div class="sidebar-user" v-if="isLoggedIn">
         <strong>{{ merchantLabel }}</strong>
@@ -1355,6 +1525,8 @@ async function run(task: () => Promise<void>) {
                       <label>暂停原因（选填）</label>
                       <textarea v-model="pauseForm.reason" placeholder="例如：无库存、设备维修" />
                       <div class="pause-form-actions">
+                        <button class="btn btn-ghost pause-price-feedback-btn" @click="goToPriceFeedback(p)">价格反馈</button>
+                        <span class="pause-form-action-spacer"></span>
                         <button class="btn btn-outline" @click="expandingProduct = null">取消</button>
                         <button class="btn btn-primary" :disabled="submittingProduct === expandingProduct" @click="setUnavailable(expandingProduct!)">确认暂停</button>
                       </div>
@@ -1423,6 +1595,132 @@ async function run(task: () => Promise<void>) {
             </div>
           </div>
         </div>
+
+        <!-- Feedback -->
+        <template v-if="navActive === 'feedback'">
+          <div class="welcome">
+            <h1>反馈中心</h1>
+            <p>提交页面、派单、商品状态问题，也可以反馈机器价格推荐建议。</p>
+          </div>
+
+          <div class="feedback-grid">
+            <button
+              :class="['feedback-type-card', { active: feedbackMode === 'issue' }]"
+              @click="feedbackMode = 'issue'"
+            >
+              <span>问题反馈</span>
+              <strong>页面异常、派单异常、商品状态问题</strong>
+              <small>提交后由中转平台管理端处理</small>
+            </button>
+            <button
+              :class="['feedback-type-card', { active: feedbackMode === 'price_suggestion' }]"
+              @click="feedbackMode = 'price_suggestion'"
+            >
+              <span>机器价格推荐反馈</span>
+              <strong>觉得某台机器推荐价格不合理</strong>
+              <small>建议价格固定为元/天</small>
+            </button>
+          </div>
+
+          <p v-if="feedbackNotice" class="feedback-notice">{{ feedbackNotice }}</p>
+          <p v-if="feedbackError" class="feedback-error">{{ feedbackError }}</p>
+
+          <div class="feedback-form-card" v-if="feedbackMode === 'issue'">
+            <div class="feedback-form-header">
+              <h2>问题反馈</h2>
+              <p>用于页面异常、派单异常、商品状态问题、登录账号问题。</p>
+            </div>
+            <div class="field">
+              <label>问题类型</label>
+              <select v-model="issueFeedbackForm.issueType">
+                <option value="page">页面问题</option>
+                <option value="dispatch">派单问题</option>
+                <option value="product">商品问题</option>
+                <option value="account">登录账号问题</option>
+                <option value="other">其他</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>问题描述</label>
+              <textarea v-model="issueFeedbackForm.description" placeholder="请描述遇到的问题，例如：商品状态切换后没有刷新。" />
+            </div>
+            <div class="field">
+              <label>联系方式（选填）</label>
+              <input v-model="issueFeedbackForm.contact" :placeholder="accountLabel" />
+            </div>
+            <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitIssueFeedback">
+              {{ feedbackSubmitting ? '提交中...' : '提交问题反馈' }}
+            </button>
+          </div>
+
+          <div class="feedback-form-card" v-if="feedbackMode === 'price_suggestion'">
+            <div class="feedback-form-header">
+              <h2>机器价格推荐反馈</h2>
+              <p>用于反馈某台机器推荐价格偏高、偏低或型号不准。</p>
+            </div>
+            <div class="field">
+              <label>商品</label>
+              <input
+                v-model="priceFeedbackForm.product"
+                list="feedback-product-options"
+                placeholder="请选择或输入商品"
+                @change="syncPriceFeedbackRuleId"
+              />
+              <datalist id="feedback-product-options">
+                <option v-for="product in feedbackProductOptions" :key="product.rule_id" :value="product.product"></option>
+              </datalist>
+            </div>
+            <div class="field">
+              <label>当前问题</label>
+              <select v-model="priceFeedbackForm.priceIssueType">
+                <option value="too_high">价格偏高</option>
+                <option value="too_low">价格偏低</option>
+                <option value="wrong_model">商品型号不准</option>
+                <option value="other">其他</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>建议价格</label>
+              <div class="price-input-wrap">
+                <input v-model="priceFeedbackForm.pricePerDay" inputmode="decimal" placeholder="例如 80" />
+                <span>元/天</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>原因说明</label>
+              <textarea v-model="priceFeedbackForm.reason" placeholder="例如：同城同行价格在 60-70 元/天" />
+            </div>
+            <div class="field">
+              <label>联系方式（选填）</label>
+              <input v-model="priceFeedbackForm.contact" :placeholder="accountLabel" />
+            </div>
+            <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitPriceFeedback">
+              {{ feedbackSubmitting ? '提交中...' : '提交价格建议' }}
+            </button>
+          </div>
+
+          <div class="feedback-record-panel">
+            <div class="feedback-record-header">
+              <div>
+                <h2>我的反馈记录</h2>
+                <p>状态包含：已提交 / 处理中 / 已处理。</p>
+              </div>
+              <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshFeedbackRecords">刷新</button>
+            </div>
+            <div v-if="feedbackLoading" class="notif-empty">反馈记录加载中...</div>
+            <div v-else-if="feedbackRecords.length === 0" class="notif-empty">暂无反馈记录。</div>
+            <div v-else class="feedback-record-list">
+              <div v-for="record in feedbackRecords" :key="record.id" class="feedback-record-item">
+                <div>
+                  <strong>{{ feedbackTypeText(record.type) }}</strong>
+                  <span>{{ feedbackSummary(record) }}</span>
+                  <small>{{ formatDispatchTime(record.created_at) }}</small>
+                </div>
+                <em :class="`feedback-status ${record.status}`">{{ feedbackStatusText(record.status) }}</em>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- Notifications -->
         <template v-if="navActive === 'notifications'">

@@ -169,3 +169,73 @@ test('ApiClient sends merchant bulk availability update once with selected rule 
   assert.deepEqual(result.failed_rule_ids, ['rule-3'])
   globalThis.fetch = originalFetch
 })
+
+test('ApiClient requests merchant feedback records endpoint', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+
+  globalThis.fetch = async (input) => {
+    requestedPath = String(input)
+    return new Response(JSON.stringify({ items: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.listFeedback()
+
+  assert.equal(requestedPath, '/api/merchant/feedback')
+  assert.deepEqual(result, { items: [] })
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient submits merchant price suggestion feedback with yuan-per-day price', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  let requestedMethod = ''
+  let requestedBody = ''
+
+  globalThis.fetch = async (input, init) => {
+    requestedPath = String(input)
+    requestedMethod = init?.method || ''
+    requestedBody = String(init?.body || '')
+    return new Response(JSON.stringify({
+      id: 'feedback-1',
+      type: 'price_suggestion',
+      status: 'submitted',
+      product: '大疆Pocket3',
+      rule_id: 'rule-pocket3',
+      price_per_day: 80,
+      created_at: '2026-05-22T10:00:00+08:00'
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.submitFeedback({
+    type: 'price_suggestion',
+    product: '大疆Pocket3',
+    rule_id: 'rule-pocket3',
+    price_issue_type: 'too_high',
+    price_per_day: 80,
+    reason: '同城同行价格在 60-70 元/天',
+    contact: 'merchant-account',
+  })
+
+  assert.equal(requestedPath, '/api/merchant/feedback')
+  assert.equal(requestedMethod, 'POST')
+  assert.deepEqual(JSON.parse(requestedBody), {
+    type: 'price_suggestion',
+    product: '大疆Pocket3',
+    rule_id: 'rule-pocket3',
+    price_issue_type: 'too_high',
+    price_per_day: 80,
+    reason: '同城同行价格在 60-70 元/天',
+    contact: 'merchant-account',
+  })
+  assert.equal(result.status, 'submitted')
+  globalThis.fetch = originalFetch
+})
