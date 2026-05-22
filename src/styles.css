@@ -34,6 +34,50 @@ button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 h1, h2, h3, p { margin: 0; }
 
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+[role="tab"]:focus:not(:focus-visible) {
+  outline: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid rgba(159,232,112,0.78);
+  outline-offset: 2px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  .btn,
+  .sidebar-nav button,
+  .feedback-tab,
+  .product-card,
+  .notif-read-btn,
+  .notif-more,
+  .dispatch-burst,
+  .dispatch-bar-segment {
+    -webkit-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .btn:active,
+  .sidebar-nav button:active,
+  .feedback-tab:active,
+  .notif-read-btn:active,
+  .notif-more:active,
+  .dispatch-burst:active,
+  .dispatch-bar-segment:active {
+    filter: brightness(0.98);
+  }
+}
+
 .shell { display: flex; min-height: 100vh; }
 
 /* ─── Sidebar ─── */

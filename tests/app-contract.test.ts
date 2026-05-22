@@ -473,6 +473,14 @@ test('mobile layout moves primary navigation into a bottom tab bar', () => {
   assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.sidebar-user\s*\{[\s\S]*display:\s*none/)
 })
 
+test('mobile touch interactions suppress native tap highlight while preserving focus-visible', () => {
+  assert.match(cssSource, /@media\s*\(hover:\s*none\)\s*and\s*\(pointer:\s*coarse\)\s*\{[\s\S]*-webkit-tap-highlight-color:\s*transparent/)
+  assert.match(cssSource, /@media\s*\(hover:\s*none\)\s*and\s*\(pointer:\s*coarse\)\s*\{[\s\S]*button,\s*a,\s*\[role="button"\],\s*\[role="tab"\],[\s\S]*\.sidebar-nav button,[\s\S]*\.feedback-tab,[\s\S]*\.product-card[\s\S]*tap-highlight-color:\s*transparent/)
+  assert.match(cssSource, /@media\s*\(hover:\s*none\)\s*and\s*\(pointer:\s*coarse\)\s*\{[\s\S]*touch-action:\s*manipulation/)
+  assert.match(cssSource, /button:focus:not\(:focus-visible\),[\s\S]*\[role="tab"\]:focus:not\(:focus-visible\)\s*\{[\s\S]*outline:\s*none/)
+  assert.match(cssSource, /button:focus-visible,[\s\S]*\[role="tab"\]:focus-visible\s*\{[\s\S]*outline:\s*2px solid rgba\(159,232,112,0\.78\)/)
+})
+
 test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(appSource, /const feedbackRecords = ref<MerchantFeedbackRecord\[\]>\(\[\]\)/)
   assert.match(appSource, /const feedbackMode = ref<MerchantFeedbackType>\('issue'\)/)
