@@ -501,12 +501,15 @@ test('merchant feedback page provides issue and price suggestion flows', () => {
 
 test('merchant feedback mode switch uses compact segmented tabs', () => {
   assert.match(appSource, /class="feedback-tabs"/)
+  assert.match(appSource, /class="feedback-tab-indicator"/)
+  assert.match(appSource, /'--feedback-active-index': feedbackMode === 'price_suggestion' \? 1 : 0/)
   assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'issue' \}\]"/)
   assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'price_suggestion' \}\]"/)
   assert.doesNotMatch(appSource, /class="feedback-type-card"/)
   assert.match(cssSource, /\.feedback-tabs\s*\{/)
+  assert.match(cssSource, /\.feedback-tab-indicator\s*\{[\s\S]*transform:\s*translateX\(calc\(var\(--feedback-active-index,\s*0\) \* \(100% \+ 6px\)\)\)[\s\S]*transition:\s*transform 0\.24s cubic-bezier\(0\.22,\s*0\.86,\s*0\.26,\s*1\.08\)/)
   assert.match(cssSource, /\.feedback-tab\s*\{[\s\S]*min-height:\s*46px/)
-  assert.match(cssSource, /\.feedback-tab\.active\s*\{[\s\S]*background:\s*rgba\(159,232,112,0\.24\)[\s\S]*color:\s*var\(--positive-deep\)/)
+  assert.match(cssSource, /\.feedback-tab\.active\s*\{[\s\S]*background:\s*transparent[\s\S]*color:\s*var\(--positive-deep\)/)
   assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.feedback-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
 })
 

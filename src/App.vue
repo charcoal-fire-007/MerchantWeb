@@ -1615,6 +1615,11 @@ async function run(task: () => Promise<void>) {
           </div>
 
           <div class="feedback-tabs" role="tablist" aria-label="反馈类型">
+            <span
+              class="feedback-tab-indicator"
+              :style="{ '--feedback-active-index': feedbackMode === 'price_suggestion' ? 1 : 0 }"
+              aria-hidden="true"
+            ></span>
             <button
               :class="['feedback-tab', { active: feedbackMode === 'issue' }]"
               @click="feedbackMode = 'issue'"

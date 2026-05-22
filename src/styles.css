@@ -525,23 +525,36 @@ h1, h2, h3, p { margin: 0; }
 
 /* ─── Feedback ─── */
 .feedback-tabs {
+  position: relative;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px; margin-bottom: 16px; padding: 5px;
   border-radius: var(--radius-pill);
   background: rgba(255,255,255,0.45);
   border: 1px solid rgba(0,0,0,0.045);
+  overflow: hidden;
+}
+.feedback-tab-indicator {
+  position: absolute;
+  top: 5px; bottom: 5px; left: 5px;
+  width: calc((100% - 16px) / 2);
+  border-radius: var(--radius-pill);
+  background: rgba(159,232,112,0.22);
+  box-shadow: inset 0 0 0 1px rgba(159,232,112,0.34);
+  transform: translateX(calc(var(--feedback-active-index, 0) * (100% + 6px)));
+  transition: transform 0.24s cubic-bezier(0.22, 0.86, 0.26, 1.08);
+  pointer-events: none;
 }
 .feedback-tab {
   min-height: 46px; border: 0; border-radius: var(--radius-pill);
   background: transparent; color: var(--body);
   font-size: 14px; font-weight: 900; letter-spacing: -0.01em;
-  cursor: pointer; transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
+  cursor: pointer; transition: transform 0.16s ease, color 0.16s ease;
+  position: relative; z-index: 1;
 }
-.feedback-tab:hover { transform: translateY(-1px); background: rgba(255,255,255,0.62); }
+.feedback-tab:hover { transform: translateY(-1px); }
 .feedback-tab.active {
-  background: rgba(159,232,112,0.24);
+  background: transparent;
   color: var(--positive-deep);
-  box-shadow: inset 0 0 0 1px rgba(159,232,112,0.42);
 }
 .feedback-form-card,
 .feedback-record-panel {
