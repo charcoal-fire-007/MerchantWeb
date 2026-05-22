@@ -524,24 +524,25 @@ h1, h2, h3, p { margin: 0; }
 .bulk-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ─── Feedback ─── */
-.feedback-grid {
+.feedback-tabs {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px; margin-bottom: 18px;
+  gap: 8px; margin-bottom: 16px; padding: 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,0.45);
+  border: 1px solid rgba(0,0,0,0.045);
 }
-.feedback-type-card {
-  min-height: 138px; padding: 20px; border-radius: var(--radius-xl);
-  border: 1px solid rgba(0,0,0,0.06); background: var(--canvas);
-  display: grid; align-content: start; gap: 8px; text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+.feedback-tab {
+  min-height: 46px; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--body);
+  font-size: 14px; font-weight: 900; letter-spacing: -0.01em;
+  cursor: pointer; transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
-.feedback-type-card:hover { transform: translateY(-2px); border-color: rgba(22,51,0,0.14); }
-.feedback-type-card.active {
-  border-color: rgba(159,232,112,0.7);
-  background: linear-gradient(135deg, rgba(159,232,112,0.24), rgba(255,255,255,0.96));
+.feedback-tab:hover { transform: translateY(-1px); background: rgba(255,255,255,0.62); }
+.feedback-tab.active {
+  background: rgba(159,232,112,0.24);
+  color: var(--positive-deep);
+  box-shadow: inset 0 0 0 1px rgba(159,232,112,0.42);
 }
-.feedback-type-card span { font-size: 13px; color: var(--positive-deep); font-weight: 900; }
-.feedback-type-card strong { font-size: 18px; line-height: 1.25; color: var(--ink); }
-.feedback-type-card small { color: var(--mute); font-size: 12px; line-height: 1.45; }
 .feedback-form-card,
 .feedback-record-panel {
   padding: 20px 24px; margin-bottom: 22px; border-radius: var(--radius-xl);
@@ -859,8 +860,8 @@ h1, h2, h3, p { margin: 0; }
   .dispatch-record-table-wrap { display: none; }
   .dispatch-record-cards { display: grid; }
   .dispatch-record-card-head { display: grid; }
-  .feedback-grid { grid-template-columns: 1fr; gap: 12px; }
-  .feedback-type-card { min-height: 116px; padding: 16px; }
+  .feedback-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 14px; }
+  .feedback-tab { min-height: 44px; font-size: 13px; }
   .feedback-form-card,
   .feedback-record-panel { padding: 16px; }
   .feedback-submit { width: 100%; justify-self: stretch; }

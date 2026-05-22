@@ -495,8 +495,26 @@ test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(appSource, /v-model="priceFeedbackForm\.pricePerDay"/)
   assert.match(appSource, />元\/天<\/span>/)
   assert.match(appSource, /提交价格建议/)
-  assert.match(cssSource, /\.feedback-grid\s*\{/)
+  assert.match(cssSource, /\.feedback-tabs\s*\{/)
   assert.match(cssSource, /\.feedback-record-list\s*\{/)
+})
+
+test('merchant feedback mode switch uses compact segmented tabs', () => {
+  assert.match(appSource, /class="feedback-tabs"/)
+  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'issue' \}\]"/)
+  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'price_suggestion' \}\]"/)
+  assert.doesNotMatch(appSource, /class="feedback-type-card"/)
+  assert.match(cssSource, /\.feedback-tabs\s*\{/)
+  assert.match(cssSource, /\.feedback-tab\s*\{[\s\S]*min-height:\s*46px/)
+  assert.match(cssSource, /\.feedback-tab\.active\s*\{[\s\S]*background:\s*rgba\(159,232,112,0\.24\)[\s\S]*color:\s*var\(--positive-deep\)/)
+  assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.feedback-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
+})
+
+test('merchant feedback page maps not found backend errors to friendly copy', () => {
+  assert.match(appSource, /function feedbackErrorMessage\(err: unknown, fallback: string\)/)
+  assert.match(appSource, /message === 'Not Found'/)
+  assert.match(appSource, /\\u53cd\\u9988\\u670d\\u52a1\\u6682\\u4e0d\\u53ef\\u7528/)
+  assert.match(appSource, /feedbackErrorMessage\(err, '[^']+'\)/)
 })
 
 test('product pause panel links directly to price suggestion feedback with current product', () => {

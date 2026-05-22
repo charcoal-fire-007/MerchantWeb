@@ -569,10 +569,21 @@ async function refreshFeedbackRecords() {
     feedbackRecords.value = result.items || []
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return
-    feedbackError.value = err instanceof Error ? err.message : '反馈记录加载失败'
+    feedbackError.value = feedbackErrorMessage(err, '反馈记录加载失败')
   } finally {
     feedbackLoading.value = false
   }
+}
+
+function feedbackErrorMessage(err: unknown, fallback: string) {
+  if (err instanceof Error) {
+    const message = err.message.trim()
+    if (message === 'Not Found') {
+      return '\u53cd\u9988\u670d\u52a1\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5'
+    }
+    return message || fallback
+  }
+  return fallback
 }
 
 async function submitIssueFeedback() {
@@ -595,7 +606,7 @@ async function submitIssueFeedback() {
     issueFeedbackForm.description = ''
     feedbackNotice.value = '问题反馈已提交'
   } catch (err) {
-    feedbackError.value = err instanceof Error ? err.message : '反馈提交失败'
+    feedbackError.value = feedbackErrorMessage(err, '反馈提交失败')
   } finally {
     feedbackSubmitting.value = false
   }
@@ -630,7 +641,7 @@ async function submitPriceFeedback() {
     priceFeedbackForm.reason = ''
     feedbackNotice.value = '价格建议已提交'
   } catch (err) {
-    feedbackError.value = err instanceof Error ? err.message : '反馈提交失败'
+    feedbackError.value = feedbackErrorMessage(err, '反馈提交失败')
   } finally {
     feedbackSubmitting.value = false
   }
@@ -1603,22 +1614,18 @@ async function run(task: () => Promise<void>) {
             <p>提交页面、派单、商品状态问题，也可以反馈机器价格推荐建议。</p>
           </div>
 
-          <div class="feedback-grid">
+          <div class="feedback-tabs" role="tablist" aria-label="反馈类型">
             <button
-              :class="['feedback-type-card', { active: feedbackMode === 'issue' }]"
+              :class="['feedback-tab', { active: feedbackMode === 'issue' }]"
               @click="feedbackMode = 'issue'"
             >
-              <span>问题反馈</span>
-              <strong>页面异常、派单异常、商品状态问题</strong>
-              <small>提交后由中转平台管理端处理</small>
+              问题反馈
             </button>
             <button
-              :class="['feedback-type-card', { active: feedbackMode === 'price_suggestion' }]"
+              :class="['feedback-tab', { active: feedbackMode === 'price_suggestion' }]"
               @click="feedbackMode = 'price_suggestion'"
             >
-              <span>机器价格推荐反馈</span>
-              <strong>觉得某台机器推荐价格不合理</strong>
-              <small>建议价格固定为元/天</small>
+              价格反馈
             </button>
           </div>
 
