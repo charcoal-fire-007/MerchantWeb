@@ -91,6 +91,19 @@ const priceFeedbackForm = reactive({
   reason: '',
   contact: '',
 })
+const issueFeedbackOptions: Array<{ value: MerchantIssueType; label: string }> = [
+  { value: 'page', label: '页面问题' },
+  { value: 'dispatch', label: '派单问题' },
+  { value: 'product', label: '商品问题' },
+  { value: 'account', label: '登录账号问题' },
+  { value: 'other', label: '其他' },
+]
+const priceIssueFeedbackOptions: Array<{ value: MerchantPriceIssueType; label: string }> = [
+  { value: 'too_high', label: '价格偏高' },
+  { value: 'too_low', label: '价格偏低' },
+  { value: 'wrong_model', label: '商品型号不准' },
+  { value: 'other', label: '其他' },
+]
 const expandingProduct = ref<string | null>(null)
 const pauseForm = reactive({ reason: '' })
 const submittingProduct = ref<string | null>(null)
@@ -561,14 +574,34 @@ function syncPriceFeedbackRuleId() {
   priceFeedbackForm.ruleId = selected?.rule_id || ''
 }
 
+function sortFeedbackRecords(items: MerchantFeedbackRecord[]) {
+  return [...items].sort((left, right) => feedbackRecordTime(right) - feedbackRecordTime(left))
+}
+
+function feedbackRecordTime(record: MerchantFeedbackRecord) {
+  const timestamp = Date.parse(record.created_at || '')
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function prependFeedbackRecord(record: MerchantFeedbackRecord) {
+  feedbackRecords.value = sortFeedbackRecords([
+    record,
+    ...feedbackRecords.value.filter((item) => item.id !== record.id),
+  ])
+}
+
 async function refreshFeedbackRecords() {
   if (!isLoggedIn.value) return
   feedbackLoading.value = true
+  feedbackError.value = ''
   try {
     const result = await api.listFeedback()
-    feedbackRecords.value = result.items || []
+    feedbackRecords.value = sortFeedbackRecords(result.items || [])
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return
+    if (err instanceof ApiError && err.status === 404) {
+      feedbackRecords.value = []
+    }
     feedbackError.value = feedbackErrorMessage(err, '反馈记录加载失败')
   } finally {
     feedbackLoading.value = false
@@ -602,7 +635,7 @@ async function submitIssueFeedback() {
       description,
       contact: issueFeedbackForm.contact.trim() || accountLabel.value,
     })
-    feedbackRecords.value = [record, ...feedbackRecords.value.filter((item) => item.id !== record.id)]
+    prependFeedbackRecord(record)
     issueFeedbackForm.description = ''
     feedbackNotice.value = '问题反馈已提交'
   } catch (err) {
@@ -614,13 +647,14 @@ async function submitIssueFeedback() {
 
 async function submitPriceFeedback() {
   const product = priceFeedbackForm.product.trim()
+  syncPriceFeedbackRuleId()
   const pricePerDay = Number(priceFeedbackForm.pricePerDay)
   if (!product) {
     feedbackError.value = '请先选择商品'
     return
   }
-  if (!Number.isFinite(pricePerDay) || pricePerDay <= 0) {
-    feedbackError.value = '请填写有效的建议价格'
+  if (!Number.isInteger(pricePerDay) || pricePerDay <= 0) {
+    feedbackError.value = '请填写有效的整数建议价格'
     return
   }
   feedbackSubmitting.value = true
@@ -632,11 +666,11 @@ async function submitPriceFeedback() {
       product,
       rule_id: priceFeedbackForm.ruleId || null,
       price_issue_type: priceFeedbackForm.priceIssueType,
-      price_per_day: Number(priceFeedbackForm.pricePerDay),
+      price_per_day: pricePerDay,
       reason: priceFeedbackForm.reason.trim() || null,
       contact: priceFeedbackForm.contact.trim() || accountLabel.value,
     })
-    feedbackRecords.value = [record, ...feedbackRecords.value.filter((item) => item.id !== record.id)]
+    prependFeedbackRecord(record)
     priceFeedbackForm.pricePerDay = ''
     priceFeedbackForm.reason = ''
     feedbackNotice.value = '价格建议已提交'
@@ -1644,13 +1678,19 @@ async function run(task: () => Promise<void>) {
             </div>
             <div class="field">
               <label>问题类型</label>
-              <select v-model="issueFeedbackForm.issueType">
-                <option value="page">页面问题</option>
-                <option value="dispatch">派单问题</option>
-                <option value="product">商品问题</option>
-                <option value="account">登录账号问题</option>
-                <option value="other">其他</option>
-              </select>
+              <div class="feedback-choice-group" role="radiogroup" aria-label="问题类型">
+                <button
+                  v-for="option in issueFeedbackOptions"
+                  :key="option.value"
+                  type="button"
+                  role="radio"
+                  :aria-checked="issueFeedbackForm.issueType === option.value"
+                  :class="['feedback-choice', { active: issueFeedbackForm.issueType === option.value }]"
+                  @click="issueFeedbackForm.issueType = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
             </div>
             <div class="field">
               <label>问题描述</label>
@@ -1684,17 +1724,24 @@ async function run(task: () => Promise<void>) {
             </div>
             <div class="field">
               <label>当前问题</label>
-              <select v-model="priceFeedbackForm.priceIssueType">
-                <option value="too_high">价格偏高</option>
-                <option value="too_low">价格偏低</option>
-                <option value="wrong_model">商品型号不准</option>
-                <option value="other">其他</option>
-              </select>
+              <div class="feedback-choice-group" role="radiogroup" aria-label="当前问题">
+                <button
+                  v-for="option in priceIssueFeedbackOptions"
+                  :key="option.value"
+                  type="button"
+                  role="radio"
+                  :aria-checked="priceFeedbackForm.priceIssueType === option.value"
+                  :class="['feedback-choice', { active: priceFeedbackForm.priceIssueType === option.value }]"
+                  @click="priceFeedbackForm.priceIssueType = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
             </div>
             <div class="field">
               <label>建议价格</label>
               <div class="price-input-wrap">
-                <input v-model="priceFeedbackForm.pricePerDay" inputmode="decimal" placeholder="例如 80" />
+                <input v-model="priceFeedbackForm.pricePerDay" type="number" inputmode="numeric" min="1" step="1" placeholder="例如 80" />
                 <span>元/天</span>
               </div>
             </div>
