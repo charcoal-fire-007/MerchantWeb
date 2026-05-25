@@ -62,6 +62,49 @@ export type MerchantFeedbackType = 'issue' | 'price_suggestion'
 export type MerchantFeedbackStatus = 'submitted' | 'processing' | 'resolved'
 export type MerchantIssueType = 'page' | 'dispatch' | 'product' | 'account' | 'other'
 export type MerchantPriceIssueType = 'price_unreasonable' | 'wrong_model' | 'other'
+export type MerchantProductApplicationType = 'existing_product' | 'new_product'
+export type MerchantProductApplicationStatus = 'submitted' | 'reviewing' | 'manual_processing' | 'enabled' | 'rejected'
+
+export interface MerchantProductApplicationOption {
+  product_id: string
+  rule_id?: string | null
+  product: string
+  keywords?: string[]
+  category?: string | null
+}
+
+export interface MerchantProductApplicationRecord {
+  id: string
+  application_type: MerchantProductApplicationType
+  status: MerchantProductApplicationStatus
+  product: string
+  product_id?: string | null
+  rule_id?: string | null
+  model_note?: string | null
+  reason?: string | null
+  contact?: string | null
+  rejection_reason?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface MerchantProductApplicationOptionsResponse {
+  items: MerchantProductApplicationOption[]
+}
+
+export interface MerchantProductApplicationListResponse {
+  items: MerchantProductApplicationRecord[]
+}
+
+export interface MerchantProductApplicationPayload {
+  application_type: MerchantProductApplicationType
+  product: string
+  product_id?: string | null
+  rule_id?: string | null
+  model_note?: string | null
+  reason?: string | null
+  contact?: string | null
+}
 
 export interface MerchantFeedbackRecord {
   id: string
@@ -259,6 +302,23 @@ export class ApiClient {
 
   async submitFeedback(payload: MerchantFeedbackPayload): Promise<MerchantFeedbackRecord> {
     return this.request<MerchantFeedbackRecord>('/api/merchant/feedback', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+  }
+
+  async listProductApplicationOptions(): Promise<MerchantProductApplicationOptionsResponse> {
+    return this.request<MerchantProductApplicationOptionsResponse>('/api/merchant/product-applications/options')
+  }
+
+  async listProductApplications(): Promise<MerchantProductApplicationListResponse> {
+    return this.request<MerchantProductApplicationListResponse>('/api/merchant/product-applications')
+  }
+
+  async submitProductApplication(
+    payload: MerchantProductApplicationPayload
+  ): Promise<MerchantProductApplicationRecord> {
+    return this.request<MerchantProductApplicationRecord>('/api/merchant/product-applications', {
       method: 'POST',
       body: JSON.stringify(payload)
     })

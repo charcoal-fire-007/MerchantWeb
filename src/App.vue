@@ -10,6 +10,9 @@ import {
   type MerchantNotification,
   type MerchantNotificationTrendDay,
   type MerchantPriceIssueType,
+  type MerchantProductApplicationOption,
+  type MerchantProductApplicationRecord,
+  type MerchantProductApplicationType,
   type MerchantProduct,
 } from './api'
 import {
@@ -23,6 +26,17 @@ import { getRecentUnreadNotifications } from './notifications'
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
+type FeedbackCenterMode = 'product_application' | 'feedback'
+
+interface SubmissionRecord {
+  id: string
+  typeText: string
+  title: string
+  summary: string
+  status: string
+  statusText: string
+  createdAt: string
+}
 
 interface DispatchChartBarSegment {
   product: string
@@ -73,11 +87,28 @@ const dispatchChartTooltip = reactive({
   y: 0,
 })
 const feedbackRecords = ref<MerchantFeedbackRecord[]>([])
+const productApplicationOptions = ref<MerchantProductApplicationOption[]>([])
+const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
+const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
 const feedbackLoading = ref(false)
 const feedbackSubmitting = ref(false)
+const productApplicationOptionsLoading = ref(false)
+const productApplicationSubmitting = ref(false)
 const feedbackNotice = ref('')
 const feedbackError = ref('')
+const productApplicationMode = ref<MerchantProductApplicationType>('existing_product')
+const existingProductApplicationForm = reactive({
+  productId: '',
+  reason: '',
+  contact: '',
+})
+const newProductApplicationForm = reactive({
+  product: '',
+  modelNote: '',
+  reason: '',
+  contact: '',
+})
 const issueFeedbackForm = reactive({
   issueType: 'page' as MerchantIssueType,
   description: '',
@@ -195,6 +226,31 @@ const feedbackProductOptions = computed(() => {
     return true
   })
 })
+const selectedProductApplicationOption = computed(() =>
+  productApplicationOptions.value.find((option) => option.product_id === existingProductApplicationForm.productId)
+)
+const submissionRecords = computed<SubmissionRecord[]>(() => {
+  const productApplicationItems = productApplicationRecords.value.map((record) => ({
+    id: `application-${record.id}`,
+    typeText: productApplicationTypeText(record.application_type),
+    title: record.product || '未命名商品',
+    summary: productApplicationSummary(record),
+    status: record.status,
+    statusText: productApplicationStatusText(record.status),
+    createdAt: record.created_at,
+  }))
+  const feedbackItems = feedbackRecords.value.map((record) => ({
+    id: `feedback-${record.id}`,
+    typeText: feedbackTypeText(record.type),
+    title: feedbackSummary(record),
+    summary: feedbackRecordDetail(record),
+    status: record.status,
+    statusText: feedbackStatusText(record.status),
+    createdAt: record.created_at,
+  }))
+  return [...productApplicationItems, ...feedbackItems]
+    .sort((left, right) => recordTime(right.createdAt) - recordTime(left.createdAt))
+})
 const issueFeedbackHelpText = computed(() => ({
   page: '页面展示、按钮点击、数据刷新等使用异常。',
   dispatch: '派单通知、派单记录、订单分配等流程异常。',
@@ -287,7 +343,7 @@ watch(isEnabledProductsCollapsed, () => {
 })
 watch(navActive, () => {
   if (navActive.value === 'feedback') {
-    void refreshFeedbackRecords()
+    void refreshFeedbackCenter()
   }
 })
 
@@ -586,15 +642,16 @@ function goToNotifications() {
   newDispatchBurstCount.value = 0
 }
 
-function goToFeedback(mode: MerchantFeedbackType = 'price_suggestion') {
-  feedbackMode.value = mode
+function goToFeedback(mode: FeedbackCenterMode = 'product_application') {
+  feedbackCenterMode.value = mode
   feedbackNotice.value = ''
   feedbackError.value = ''
   navActive.value = 'feedback'
-  void refreshFeedbackRecords()
+  void refreshFeedbackCenter()
 }
 
 function goToPriceFeedback(product: MerchantProduct) {
+  feedbackCenterMode.value = 'feedback'
   feedbackMode.value = 'price_suggestion'
   priceFeedbackForm.product = product.product
   priceFeedbackForm.ruleId = product.rule_id
@@ -605,7 +662,33 @@ function goToPriceFeedback(product: MerchantProduct) {
   feedbackNotice.value = ''
   feedbackError.value = ''
   navActive.value = 'feedback'
-  void refreshFeedbackRecords()
+  void refreshFeedbackCenter()
+}
+
+function switchFeedbackCenterMode(mode: FeedbackCenterMode) {
+  feedbackCenterMode.value = mode
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  if (mode === 'product_application') {
+    void refreshProductApplicationOptions()
+  }
+}
+
+function switchProductApplicationMode(mode: MerchantProductApplicationType) {
+  productApplicationMode.value = mode
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  if (mode === 'existing_product') {
+    void refreshProductApplicationOptions()
+  }
+}
+
+function syncSelectedProductApplicationOption() {
+  if (existingProductApplicationForm.productId) return
+  const firstOption = productApplicationOptions.value[0]
+  if (firstOption) {
+    existingProductApplicationForm.productId = firstOption.product_id
+  }
 }
 
 function syncPriceFeedbackRuleId() {
@@ -624,8 +707,16 @@ function sortFeedbackRecords(items: MerchantFeedbackRecord[]) {
   return [...items].sort((left, right) => feedbackRecordTime(right) - feedbackRecordTime(left))
 }
 
+function sortProductApplicationRecords(items: MerchantProductApplicationRecord[]) {
+  return [...items].sort((left, right) => recordTime(right.created_at) - recordTime(left.created_at))
+}
+
 function feedbackRecordTime(record: MerchantFeedbackRecord) {
-  const timestamp = Date.parse(record.created_at || '')
+  return recordTime(record.created_at || '')
+}
+
+function recordTime(value: string) {
+  const timestamp = Date.parse(value || '')
   return Number.isFinite(timestamp) ? timestamp : 0
 }
 
@@ -636,7 +727,26 @@ function prependFeedbackRecord(record: MerchantFeedbackRecord) {
   ])
 }
 
+function prependProductApplicationRecord(record: MerchantProductApplicationRecord) {
+  productApplicationRecords.value = sortProductApplicationRecords([
+    record,
+    ...productApplicationRecords.value.filter((item) => item.id !== record.id),
+  ])
+}
+
+async function refreshFeedbackCenter() {
+  const tasks = [refreshSubmissionRecords()]
+  if (feedbackCenterMode.value === 'product_application') {
+    tasks.push(refreshProductApplicationOptions())
+  }
+  await Promise.all(tasks)
+}
+
 async function refreshFeedbackRecords() {
+  await refreshSubmissionRecords()
+}
+
+async function refreshSubmissionRecords() {
   if (!isLoggedIn.value) return
   feedbackLoading.value = true
   feedbackError.value = ''
@@ -647,10 +757,41 @@ async function refreshFeedbackRecords() {
     if (err instanceof ApiError && err.status === 401) return
     if (err instanceof ApiError && err.status === 404) {
       feedbackRecords.value = []
+    } else {
+      feedbackError.value = feedbackErrorMessage(err, '反馈记录加载失败')
     }
-    feedbackError.value = feedbackErrorMessage(err, '反馈记录加载失败')
+  }
+  try {
+    const result = await api.listProductApplications()
+    productApplicationRecords.value = sortProductApplicationRecords(result.items || [])
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return
+    if (err instanceof ApiError && err.status === 404) {
+      productApplicationRecords.value = []
+    } else {
+      feedbackError.value = feedbackErrorMessage(err, '提交记录加载失败')
+    }
   } finally {
     feedbackLoading.value = false
+  }
+}
+
+async function refreshProductApplicationOptions() {
+  if (!isLoggedIn.value) return
+  productApplicationOptionsLoading.value = true
+  try {
+    const result = await api.listProductApplicationOptions()
+    productApplicationOptions.value = result.items || []
+    syncSelectedProductApplicationOption()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return
+    if (err instanceof ApiError && err.status === 404) {
+      productApplicationOptions.value = []
+    } else {
+      feedbackError.value = feedbackErrorMessage(err, '可申请商品加载失败')
+    }
+  } finally {
+    productApplicationOptionsLoading.value = false
   }
 }
 
@@ -663,6 +804,73 @@ function feedbackErrorMessage(err: unknown, fallback: string) {
     return message || fallback
   }
   return fallback
+}
+
+async function submitExistingProductApplication() {
+  const option = selectedProductApplicationOption.value
+  const reason = existingProductApplicationForm.reason.trim()
+  if (!option) {
+    feedbackError.value = '请先选择要申请的商品'
+    return
+  }
+  if (!reason) {
+    feedbackError.value = '请填写申请说明'
+    return
+  }
+  productApplicationSubmitting.value = true
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  try {
+    const record = await api.submitProductApplication({
+      application_type: 'existing_product',
+      product_id: option.product_id,
+      rule_id: option.rule_id || option.product_id,
+      product: option.product,
+      reason,
+      contact: existingProductApplicationForm.contact.trim() || accountLabel.value,
+    })
+    prependProductApplicationRecord(record)
+    existingProductApplicationForm.reason = ''
+    feedbackNotice.value = '商品申请已提交，审批通过后会自动开通，默认权重 1'
+  } catch (err) {
+    feedbackError.value = feedbackErrorMessage(err, '商品申请提交失败')
+  } finally {
+    productApplicationSubmitting.value = false
+  }
+}
+
+async function submitNewProductApplication() {
+  const product = newProductApplicationForm.product.trim()
+  const reason = newProductApplicationForm.reason.trim()
+  if (!product) {
+    feedbackError.value = '请填写商品名称'
+    return
+  }
+  if (!reason) {
+    feedbackError.value = '请填写申请说明'
+    return
+  }
+  productApplicationSubmitting.value = true
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+  try {
+    const record = await api.submitProductApplication({
+      application_type: 'new_product',
+      product,
+      model_note: newProductApplicationForm.modelNote.trim() || null,
+      reason,
+      contact: newProductApplicationForm.contact.trim() || accountLabel.value,
+    })
+    prependProductApplicationRecord(record)
+    newProductApplicationForm.product = ''
+    newProductApplicationForm.modelNote = ''
+    newProductApplicationForm.reason = ''
+    feedbackNotice.value = '新增商品申请已提交，需要平台人工在派单平台添加'
+  } catch (err) {
+    feedbackError.value = feedbackErrorMessage(err, '新增商品申请提交失败')
+  } finally {
+    productApplicationSubmitting.value = false
+  }
 }
 
 async function submitIssueFeedback() {
@@ -740,8 +948,22 @@ function feedbackStatusText(status: string) {
   } as Record<string, string>)[status] || '已提交'
 }
 
+function productApplicationStatusText(status: string) {
+  return ({
+    submitted: '已提交',
+    reviewing: '审核中',
+    manual_processing: '待人工添加',
+    enabled: '已开通',
+    rejected: '已驳回',
+  } as Record<string, string>)[status] || '已提交'
+}
+
 function feedbackTypeText(type: string) {
   return type === 'price_suggestion' ? '机器价格推荐反馈' : '问题反馈'
+}
+
+function productApplicationTypeText(type: string) {
+  return type === 'new_product' ? '新增商品' : '商品申请'
 }
 
 function feedbackSummary(record: MerchantFeedbackRecord) {
@@ -750,6 +972,21 @@ function feedbackSummary(record: MerchantFeedbackRecord) {
     return `${record.product || '未选择商品'}${price}`
   }
   return record.description || record.reason || '暂无描述'
+}
+
+function feedbackRecordDetail(record: MerchantFeedbackRecord) {
+  if (record.type === 'price_suggestion') {
+    return record.reason || '推荐价格、型号或其他价格相关反馈'
+  }
+  return record.description || '问题反馈已提交'
+}
+
+function productApplicationSummary(record: MerchantProductApplicationRecord) {
+  if (record.application_type === 'new_product') {
+    const modelNote = record.model_note ? ` · ${record.model_note}` : ''
+    return `${record.reason || '关键词映射库暂无，需要人工在派单平台添加'}${modelNote}`
+  }
+  return record.reason || '审批通过后自动加入商品映射，默认权重 1'
 }
 
 function markDashboardNotificationsRead() {
@@ -1696,138 +1933,248 @@ async function run(task: () => Promise<void>) {
         <template v-if="navActive === 'feedback'">
           <div class="welcome">
             <h1>反馈中心</h1>
-            <p>提交页面、派单、接单状态、登录账号问题，也可以反馈机器价格推荐建议。</p>
+            <p>提交商品申请、问题反馈和价格建议，处理进度统一在下方查看。</p>
           </div>
 
-          <div class="feedback-tabs" role="tablist" aria-label="反馈类型">
+          <div class="feedback-tabs" role="tablist" aria-label="申请与反馈类型">
             <span
               class="feedback-tab-indicator"
-              :style="{ '--feedback-active-index': feedbackMode === 'price_suggestion' ? 1 : 0 }"
+              :style="{ '--feedback-active-index': feedbackCenterMode === 'feedback' ? 1 : 0 }"
               aria-hidden="true"
             ></span>
             <button
-              :class="['feedback-tab', { active: feedbackMode === 'issue' }]"
-              @click="feedbackMode = 'issue'"
+              :class="['feedback-tab', { active: feedbackCenterMode === 'product_application' }]"
+              @click="switchFeedbackCenterMode('product_application')"
             >
-              问题反馈
+              商品申请
             </button>
             <button
-              :class="['feedback-tab', { active: feedbackMode === 'price_suggestion' }]"
-              @click="feedbackMode = 'price_suggestion'"
+              :class="['feedback-tab', { active: feedbackCenterMode === 'feedback' }]"
+              @click="switchFeedbackCenterMode('feedback')"
             >
-              价格反馈
+              问题 / 价格反馈
             </button>
           </div>
 
           <p v-if="feedbackNotice" class="feedback-notice">{{ feedbackNotice }}</p>
           <p v-if="feedbackError" class="feedback-error">{{ feedbackError }}</p>
 
-          <div class="feedback-form-card" v-if="feedbackMode === 'issue'">
+          <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
             <div class="feedback-form-header">
-              <h2>问题反馈</h2>
-              <p>用于反馈页面异常、派单异常、接单状态异常、登录账号问题。</p>
+              <h2>商品申请</h2>
+              <p>已有商品审批通过后自动开通，默认权重 1；新增商品需要平台人工在派单平台添加。</p>
             </div>
             <div class="field">
-              <label>问题类型</label>
-              <div class="feedback-choice-group" role="radiogroup" aria-label="问题类型">
+              <label>申请类型</label>
+              <div class="feedback-choice-group" role="radiogroup" aria-label="商品申请类型">
                 <button
-                  v-for="option in issueFeedbackOptions"
-                  :key="option.value"
                   type="button"
                   role="radio"
-                  :aria-checked="issueFeedbackForm.issueType === option.value"
-                  :class="['feedback-choice', { active: issueFeedbackForm.issueType === option.value }]"
-                  @click="issueFeedbackForm.issueType = option.value"
+                  :aria-checked="productApplicationMode === 'existing_product'"
+                  :class="['feedback-choice', { active: productApplicationMode === 'existing_product' }]"
+                  @click="switchProductApplicationMode('existing_product')"
                 >
-                  {{ option.label }}
+                  申请已有商品
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  :aria-checked="productApplicationMode === 'new_product'"
+                  :class="['feedback-choice', { active: productApplicationMode === 'new_product' }]"
+                  @click="switchProductApplicationMode('new_product')"
+                >
+                  申请新增商品
                 </button>
               </div>
-              <p class="feedback-field-hint">{{ issueFeedbackHelpText }}</p>
             </div>
-            <div class="field">
-              <label>问题描述</label>
-              <textarea v-model="issueFeedbackForm.description" :placeholder="issueFeedbackPlaceholder" />
-            </div>
-            <div class="field">
-              <label>联系方式（选填）</label>
-              <input v-model="issueFeedbackForm.contact" :placeholder="accountLabel" />
-            </div>
-            <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitIssueFeedback">
-              {{ feedbackSubmitting ? '提交中...' : issueFeedbackSubmitText }}
-            </button>
+
+            <template v-if="productApplicationMode === 'existing_product'">
+              <div class="field">
+                <label>可申请商品</label>
+                <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
+                <div v-else-if="productApplicationOptions.length === 0" class="notif-empty">暂无可申请商品；如果关键词库里也没有，请切换到“申请新增商品”。</div>
+                <div v-else class="feedback-choice-group product-application-options" role="radiogroup" aria-label="可申请商品">
+                  <button
+                    v-for="option in productApplicationOptions"
+                    :key="option.product_id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="existingProductApplicationForm.productId === option.product_id"
+                    :class="['feedback-choice', { active: existingProductApplicationForm.productId === option.product_id }]"
+                    @click="existingProductApplicationForm.productId = option.product_id"
+                  >
+                    {{ option.product }}
+                  </button>
+                </div>
+                <p class="feedback-field-hint">这里由中转平台返回“关键词映射库已有、但当前商户未开通”的商品，避免重复申请。</p>
+              </div>
+              <div class="field">
+                <label>申请说明</label>
+                <textarea v-model="existingProductApplicationForm.reason" placeholder="例如：我有该设备，可接单；库存 2 台，支持同城配送。" />
+              </div>
+              <div class="field">
+                <label>联系方式（选填）</label>
+                <input v-model="existingProductApplicationForm.contact" :placeholder="accountLabel" />
+              </div>
+              <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitExistingProductApplication">
+                {{ productApplicationSubmitting ? '提交中...' : '提交商品申请' }}
+              </button>
+            </template>
+
+            <template v-if="productApplicationMode === 'new_product'">
+              <div class="field">
+                <label>商品名称</label>
+                <input v-model="newProductApplicationForm.product" placeholder="例如：索尼 ZV-E10 II" />
+              </div>
+              <div class="field">
+                <label>品牌/型号补充（选填）</label>
+                <input v-model="newProductApplicationForm.modelNote" placeholder="例如：双镜头套装，可日租" />
+              </div>
+              <div class="field">
+                <label>申请说明</label>
+                <textarea v-model="newProductApplicationForm.reason" placeholder="例如：关键词映射库没有这个商品，但我有这台机器，希望平台添加。" />
+              </div>
+              <div class="field">
+                <label>联系方式（选填）</label>
+                <input v-model="newProductApplicationForm.contact" :placeholder="accountLabel" />
+              </div>
+              <p class="feedback-field-hint">新增商品审批后进入待人工添加，需要平台在派单平台新增机器并配置商户映射。</p>
+              <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitNewProductApplication">
+                {{ productApplicationSubmitting ? '提交中...' : '提交新增商品' }}
+              </button>
+            </template>
           </div>
 
-          <div class="feedback-form-card" v-if="feedbackMode === 'price_suggestion'">
+          <div class="feedback-form-card" v-if="feedbackCenterMode === 'feedback'">
             <div class="feedback-form-header">
-              <h2>机器价格推荐反馈</h2>
-              <p>用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。</p>
+              <h2>问题 / 价格反馈</h2>
+              <p>用于反馈页面异常、派单异常、接单状态异常、登录账号问题，也可以反馈机器推荐价格或型号问题。</p>
             </div>
             <div class="field">
-              <label>商品</label>
-              <input
-                v-model="priceFeedbackForm.product"
-                list="feedback-product-options"
-                placeholder="请选择或输入商品"
-                @change="syncPriceFeedbackRuleId"
-              />
-              <datalist id="feedback-product-options">
-                <option v-for="product in feedbackProductOptions" :key="product.rule_id" :value="product.product"></option>
-              </datalist>
-            </div>
-            <div class="field">
-              <label>当前问题</label>
-              <div class="feedback-choice-group" role="radiogroup" aria-label="当前问题">
+              <label>反馈类型</label>
+              <div class="feedback-choice-group" role="radiogroup" aria-label="反馈类型">
                 <button
-                  v-for="option in priceIssueFeedbackOptions"
-                  :key="option.value"
                   type="button"
                   role="radio"
-                  :aria-checked="priceFeedbackForm.priceIssueType === option.value"
-                  :class="['feedback-choice', { active: priceFeedbackForm.priceIssueType === option.value }]"
-                  @click="selectPriceIssueFeedback(option.value)"
+                  :aria-checked="feedbackMode === 'issue'"
+                  :class="['feedback-choice', { active: feedbackMode === 'issue' }]"
+                  @click="feedbackMode = 'issue'"
                 >
-                  {{ option.label }}
+                  问题反馈
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  :aria-checked="feedbackMode === 'price_suggestion'"
+                  :class="['feedback-choice', { active: feedbackMode === 'price_suggestion' }]"
+                  @click="feedbackMode = 'price_suggestion'"
+                >
+                  价格反馈
                 </button>
               </div>
             </div>
-            <div class="field" v-if="priceFeedbackRequiresPrice">
-              <label>建议价格</label>
-              <div class="price-input-wrap">
-                <input v-model="priceFeedbackForm.pricePerDay" type="number" inputmode="numeric" min="1" step="1" placeholder="例如 80" />
-                <span>元/天</span>
+
+            <template v-if="feedbackMode === 'issue'">
+              <p class="feedback-field-hint">用于反馈页面异常、派单异常、接单状态异常、登录账号问题。</p>
+              <div class="field">
+                <label>问题类型</label>
+                <div class="feedback-choice-group" role="radiogroup" aria-label="问题类型">
+                  <button
+                    v-for="option in issueFeedbackOptions"
+                    :key="option.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="issueFeedbackForm.issueType === option.value"
+                    :class="['feedback-choice', { active: issueFeedbackForm.issueType === option.value }]"
+                    @click="issueFeedbackForm.issueType = option.value"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+                <p class="feedback-field-hint">{{ issueFeedbackHelpText }}</p>
               </div>
-            </div>
-            <div class="field">
-              <label>{{ priceFeedbackReasonLabel }}</label>
-              <textarea v-model="priceFeedbackForm.reason" :placeholder="priceFeedbackReasonPlaceholder" />
-            </div>
-            <div class="field">
-              <label>联系方式（选填）</label>
-              <input v-model="priceFeedbackForm.contact" :placeholder="accountLabel" />
-            </div>
-            <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitPriceFeedback">
-              {{ feedbackSubmitting ? '提交中...' : priceFeedbackSubmitText }}
-            </button>
+              <div class="field">
+                <label>问题描述</label>
+                <textarea v-model="issueFeedbackForm.description" :placeholder="issueFeedbackPlaceholder" />
+              </div>
+              <div class="field">
+                <label>联系方式（选填）</label>
+                <input v-model="issueFeedbackForm.contact" :placeholder="accountLabel" />
+              </div>
+              <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitIssueFeedback">
+                {{ feedbackSubmitting ? '提交中...' : issueFeedbackSubmitText }}
+              </button>
+            </template>
+
+            <template v-if="feedbackMode === 'price_suggestion'">
+              <p class="feedback-field-hint">用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。</p>
+              <div class="field">
+                <label>商品</label>
+                <input
+                  v-model="priceFeedbackForm.product"
+                  list="feedback-product-options"
+                  placeholder="请选择或输入商品"
+                  @change="syncPriceFeedbackRuleId"
+                />
+                <datalist id="feedback-product-options">
+                  <option v-for="product in feedbackProductOptions" :key="product.rule_id" :value="product.product"></option>
+                </datalist>
+              </div>
+              <div class="field">
+                <label>当前问题</label>
+                <div class="feedback-choice-group" role="radiogroup" aria-label="当前问题">
+                  <button
+                    v-for="option in priceIssueFeedbackOptions"
+                    :key="option.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="priceFeedbackForm.priceIssueType === option.value"
+                    :class="['feedback-choice', { active: priceFeedbackForm.priceIssueType === option.value }]"
+                    @click="selectPriceIssueFeedback(option.value)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
+              <div class="field" v-if="priceFeedbackRequiresPrice">
+                <label>建议价格</label>
+                <div class="price-input-wrap">
+                  <input v-model="priceFeedbackForm.pricePerDay" type="number" inputmode="numeric" min="1" step="1" placeholder="例如 80" />
+                  <span>元/天</span>
+                </div>
+              </div>
+              <div class="field">
+                <label>{{ priceFeedbackReasonLabel }}</label>
+                <textarea v-model="priceFeedbackForm.reason" :placeholder="priceFeedbackReasonPlaceholder" />
+              </div>
+              <div class="field">
+                <label>联系方式（选填）</label>
+                <input v-model="priceFeedbackForm.contact" :placeholder="accountLabel" />
+              </div>
+              <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitPriceFeedback">
+                {{ feedbackSubmitting ? '提交中...' : priceFeedbackSubmitText }}
+              </button>
+            </template>
           </div>
 
           <div class="feedback-record-panel">
             <div class="feedback-record-header">
               <div>
-                <h2>我的反馈记录</h2>
-                <p>状态包含：已提交 / 处理中 / 已处理。</p>
+                <h2>我的提交记录</h2>
+                <p>状态包含：已提交 / 审核中 / 待人工添加 / 已开通 / 已驳回 / 处理中 / 已处理。</p>
               </div>
-              <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshFeedbackRecords">刷新</button>
+              <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshSubmissionRecords">刷新</button>
             </div>
-            <div v-if="feedbackLoading" class="notif-empty">反馈记录加载中...</div>
-            <div v-else-if="feedbackRecords.length === 0" class="notif-empty">暂无反馈记录。</div>
+            <div v-if="feedbackLoading" class="notif-empty">提交记录加载中...</div>
+            <div v-else-if="submissionRecords.length === 0" class="notif-empty">暂无提交记录。</div>
             <div v-else class="feedback-record-list">
-              <div v-for="record in feedbackRecords" :key="record.id" class="feedback-record-item">
+              <div v-for="record in submissionRecords" :key="record.id" class="feedback-record-item">
                 <div>
-                  <strong>{{ feedbackTypeText(record.type) }}</strong>
-                  <span>{{ feedbackSummary(record) }}</span>
-                  <small>{{ formatDispatchTime(record.created_at) }}</small>
+                  <strong>{{ record.typeText }} · {{ record.title }}</strong>
+                  <span>{{ record.summary }}</span>
+                  <small>{{ formatDispatchTime(record.createdAt) }}</small>
                 </div>
-                <em :class="`feedback-status ${record.status}`">{{ feedbackStatusText(record.status) }}</em>
+                <em :class="`feedback-status ${record.status}`">{{ record.statusText }}</em>
               </div>
             </div>
           </div>

@@ -482,11 +482,20 @@ test('mobile touch interactions suppress native tap highlight while preserving f
   assert.match(cssSource, /button:focus-visible,[\s\S]*\[role="tab"\]:focus-visible\s*\{[\s\S]*outline:\s*2px solid rgba\(159,232,112,0\.78\)/)
 })
 
-test('merchant feedback page provides issue and price suggestion flows', () => {
+test('merchant feedback center provides product applications and feedback flows', () => {
   assert.match(appSource, /const feedbackRecords = ref<MerchantFeedbackRecord\[\]>\(\[\]\)/)
-  assert.match(appSource, /const feedbackMode = ref<MerchantFeedbackType>\('price_suggestion'\)/)
-  assert.match(appSource, /async function refreshFeedbackRecords\(\)/)
+  assert.match(appSource, /const feedbackCenterMode = ref<FeedbackCenterMode>\('product_application'\)/)
+  assert.match(appSource, /const productApplicationOptions = ref<MerchantProductApplicationOption\[\]>\(\[\]\)/)
+  assert.match(appSource, /const productApplicationRecords = ref<MerchantProductApplicationRecord\[\]>\(\[\]\)/)
+  assert.match(appSource, /const submissionRecords = computed/)
+  assert.match(appSource, /async function refreshSubmissionRecords\(\)/)
   assert.match(appSource, /api\.listFeedback\(\)/)
+  assert.match(appSource, /api\.listProductApplicationOptions\(\)/)
+  assert.match(appSource, /api\.listProductApplications\(\)/)
+  assert.match(appSource, /async function submitExistingProductApplication\(\)/)
+  assert.match(appSource, /async function submitNewProductApplication\(\)/)
+  assert.match(appSource, /api\.submitProductApplication\(\{[\s\S]*application_type: 'existing_product'/)
+  assert.match(appSource, /api\.submitProductApplication\(\{[\s\S]*application_type: 'new_product'/)
   assert.match(appSource, /async function submitIssueFeedback\(\)/)
   assert.match(appSource, /async function submitPriceFeedback\(\)/)
   assert.match(appSource, /api\.submitFeedback\(\{[\s\S]*type: 'issue'/)
@@ -494,9 +503,13 @@ test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(appSource, /price_per_day: priceFeedbackRequiresPrice\.value \? pricePerDay : null/)
   assert.match(appSource, /<template v-if="navActive === 'feedback'">/)
   assert.match(appSource, /反馈中心/)
-  assert.match(appSource, /问题反馈/)
-  assert.match(appSource, /机器价格推荐反馈/)
-  assert.match(appSource, /我的反馈记录/)
+  assert.match(appSource, /商品申请/)
+  assert.match(appSource, /问题 \/ 价格反馈/)
+  assert.match(appSource, /申请已有商品/)
+  assert.match(appSource, /申请新增商品/)
+  assert.match(appSource, /默认权重 1/)
+  assert.match(appSource, /待人工添加/)
+  assert.match(appSource, /我的提交记录/)
   assert.match(appSource, /issueFeedbackForm\.issueType = option\.value/)
   assert.match(appSource, /v-model="issueFeedbackForm\.description"/)
   assert.match(appSource, /v-model="priceFeedbackForm\.product"/)
@@ -508,12 +521,12 @@ test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(cssSource, /\.feedback-record-list\s*\{/)
 })
 
-test('merchant feedback mode switch uses compact segmented tabs', () => {
+test('merchant feedback center switch uses compact segmented tabs', () => {
   assert.match(appSource, /class="feedback-tabs"/)
   assert.match(appSource, /class="feedback-tab-indicator"/)
-  assert.match(appSource, /'--feedback-active-index': feedbackMode === 'price_suggestion' \? 1 : 0/)
-  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'issue' \}\]"/)
-  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackMode === 'price_suggestion' \}\]"/)
+  assert.match(appSource, /'--feedback-active-index': feedbackCenterMode === 'feedback' \? 1 : 0/)
+  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackCenterMode === 'product_application' \}\]"/)
+  assert.match(appSource, /:class="\['feedback-tab', \{ active: feedbackCenterMode === 'feedback' \}\]"/)
   assert.doesNotMatch(appSource, /class="feedback-type-card"/)
   assert.match(cssSource, /\.feedback-tabs\s*\{/)
   assert.match(cssSource, /\.feedback-tab-indicator\s*\{[\s\S]*transform:\s*translateX\(calc\(var\(--feedback-active-index,\s*0\) \* \(100% \+ 6px\)\)\)[\s\S]*transition:\s*transform 0\.24s cubic-bezier\(0\.22,\s*0\.86,\s*0\.26,\s*1\.08\)/)
@@ -522,10 +535,10 @@ test('merchant feedback mode switch uses compact segmented tabs', () => {
   assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.feedback-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
 })
 
-test('merchant feedback navigation opens price feedback by default', () => {
-  assert.match(appSource, /function goToFeedback\(mode: MerchantFeedbackType = 'price_suggestion'\)/)
+test('merchant feedback navigation opens product application by default', () => {
+  assert.match(appSource, /function goToFeedback\(mode: FeedbackCenterMode = 'product_application'\)/)
   assert.match(appSource, /@click="goToFeedback\(\)"/)
-  assert.match(appSource, /feedbackMode\.value = mode/)
+  assert.match(appSource, /feedbackCenterMode\.value = mode/)
 })
 
 test('merchant feedback option fields use styled animated choice chips instead of native selects', () => {
@@ -592,6 +605,7 @@ test('merchant price feedback submits integer daily price and resyncs selected p
 
 test('product pause panel links directly to price suggestion feedback with current product', () => {
   assert.match(appSource, /function goToPriceFeedback\(product: MerchantProduct\)/)
+  assert.match(appSource, /feedbackCenterMode\.value = 'feedback'/)
   assert.match(appSource, /feedbackMode\.value = 'price_suggestion'/)
   assert.match(appSource, /priceFeedbackForm\.product = product\.product/)
   assert.match(appSource, /priceFeedbackForm\.ruleId = product\.rule_id/)

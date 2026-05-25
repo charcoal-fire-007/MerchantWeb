@@ -608,6 +608,7 @@ a:focus-visible,
   background: var(--canvas); border: 1px solid rgba(0,0,0,0.05);
 }
 .feedback-form-card { display: grid; gap: 14px; }
+.product-application-card { gap: 16px; }
 .feedback-form-header { display: grid; gap: 5px; }
 .feedback-form-header h2,
 .feedback-record-header h2 { font-size: 17px; font-weight: 900; }
@@ -641,6 +642,9 @@ a:focus-visible,
 }
 .feedback-choice:active {
   transform: scale(0.98);
+}
+.product-application-options {
+  max-height: 210px; overflow: auto; padding: 2px;
 }
 .feedback-submit { justify-self: end; min-width: 150px; }
 .feedback-notice,
@@ -676,7 +680,11 @@ a:focus-visible,
   background: var(--primary-pale); color: var(--positive-deep);
 }
 .feedback-status.processing { background: rgba(255,209,26,0.24); color: var(--warning-deep); }
+.feedback-status.reviewing,
+.feedback-status.manual_processing { background: rgba(255,209,26,0.24); color: var(--warning-deep); }
 .feedback-status.resolved { background: rgba(14,15,12,0.08); color: var(--body); }
+.feedback-status.enabled { background: var(--primary-pale); color: var(--positive-deep); }
+.feedback-status.rejected { background: var(--negative-pale); color: var(--negative); }
 
 @keyframes feedbackChoicePop {
   0% { transform: scale(0.985); }

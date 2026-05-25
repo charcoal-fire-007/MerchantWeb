@@ -190,6 +190,80 @@ test('ApiClient requests merchant feedback records endpoint', async () => {
   globalThis.fetch = originalFetch
 })
 
+test('ApiClient requests merchant product application options endpoint', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+
+  globalThis.fetch = async (input) => {
+    requestedPath = String(input)
+    return new Response(JSON.stringify({
+      items: [{
+        product_id: 'rule-pocket3',
+        rule_id: 'rule-pocket3',
+        product: '大疆Pocket3',
+        keywords: ['Pocket3', 'Pocket 3'],
+        category: '相机',
+      }]
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.listProductApplicationOptions()
+
+  assert.equal(requestedPath, '/api/merchant/product-applications/options')
+  assert.equal(result.items[0].product, '大疆Pocket3')
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient submits merchant existing product application', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  let requestedMethod = ''
+  let requestedBody = ''
+
+  globalThis.fetch = async (input, init) => {
+    requestedPath = String(input)
+    requestedMethod = init?.method || ''
+    requestedBody = String(init?.body || '')
+    return new Response(JSON.stringify({
+      id: 'application-1',
+      application_type: 'existing_product',
+      status: 'submitted',
+      product_id: 'rule-pocket3',
+      product: '大疆Pocket3',
+      reason: '我有该设备，可接单',
+      created_at: '2026-05-25T10:00:00+08:00'
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.submitProductApplication({
+    application_type: 'existing_product',
+    product_id: 'rule-pocket3',
+    product: '大疆Pocket3',
+    reason: '我有该设备，可接单',
+    contact: 'merchant-account',
+  })
+
+  assert.equal(requestedPath, '/api/merchant/product-applications')
+  assert.equal(requestedMethod, 'POST')
+  assert.deepEqual(JSON.parse(requestedBody), {
+    application_type: 'existing_product',
+    product_id: 'rule-pocket3',
+    product: '大疆Pocket3',
+    reason: '我有该设备，可接单',
+    contact: 'merchant-account',
+  })
+  assert.equal(result.status, 'submitted')
+  globalThis.fetch = originalFetch
+})
+
 test('ApiClient submits merchant price suggestion feedback with yuan-per-day price', async () => {
   const client = new ApiClient()
   const originalFetch = globalThis.fetch
