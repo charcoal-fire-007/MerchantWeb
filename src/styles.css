@@ -613,6 +613,9 @@ a:focus-visible,
 .feedback-record-header h2 { font-size: 17px; font-weight: 900; }
 .feedback-form-header p,
 .feedback-record-header p { color: var(--body); font-size: 12px; line-height: 1.55; }
+.feedback-field-hint {
+  margin-top: 1px; font-size: 12px; line-height: 1.55; color: var(--mute);
+}
 .feedback-choice-group {
   display: flex; flex-wrap: wrap; gap: 8px;
 }

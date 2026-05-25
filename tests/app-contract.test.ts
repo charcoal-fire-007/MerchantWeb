@@ -4,6 +4,7 @@ import path from 'node:path'
 import test from 'node:test'
 
 const appSource = fs.readFileSync(path.join(process.cwd(), 'src', 'App.vue'), 'utf8')
+const apiSource = fs.readFileSync(path.join(process.cwd(), 'src', 'api.ts'), 'utf8')
 const cssSource = fs.readFileSync(path.join(process.cwd(), 'src', 'styles.css'), 'utf8')
 const packageSource = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
 const splitRevealPath = path.join(process.cwd(), 'src', 'components', 'SplitRevealText.vue')
@@ -483,14 +484,14 @@ test('mobile touch interactions suppress native tap highlight while preserving f
 
 test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(appSource, /const feedbackRecords = ref<MerchantFeedbackRecord\[\]>\(\[\]\)/)
-  assert.match(appSource, /const feedbackMode = ref<MerchantFeedbackType>\('issue'\)/)
+  assert.match(appSource, /const feedbackMode = ref<MerchantFeedbackType>\('price_suggestion'\)/)
   assert.match(appSource, /async function refreshFeedbackRecords\(\)/)
   assert.match(appSource, /api\.listFeedback\(\)/)
   assert.match(appSource, /async function submitIssueFeedback\(\)/)
   assert.match(appSource, /async function submitPriceFeedback\(\)/)
   assert.match(appSource, /api\.submitFeedback\(\{[\s\S]*type: 'issue'/)
   assert.match(appSource, /api\.submitFeedback\(\{[\s\S]*type: 'price_suggestion'/)
-  assert.match(appSource, /price_per_day: pricePerDay/)
+  assert.match(appSource, /price_per_day: priceFeedbackRequiresPrice\.value \? pricePerDay : null/)
   assert.match(appSource, /<template v-if="navActive === 'feedback'">/)
   assert.match(appSource, /反馈中心/)
   assert.match(appSource, /问题反馈/)
@@ -499,7 +500,7 @@ test('merchant feedback page provides issue and price suggestion flows', () => {
   assert.match(appSource, /issueFeedbackForm\.issueType = option\.value/)
   assert.match(appSource, /v-model="issueFeedbackForm\.description"/)
   assert.match(appSource, /v-model="priceFeedbackForm\.product"/)
-  assert.match(appSource, /priceFeedbackForm\.priceIssueType = option\.value/)
+  assert.match(appSource, /selectPriceIssueFeedback\(option\.value\)/)
   assert.match(appSource, /v-model="priceFeedbackForm\.pricePerDay"/)
   assert.match(appSource, />元\/天<\/span>/)
   assert.match(appSource, /提交价格建议/)
@@ -521,17 +522,52 @@ test('merchant feedback mode switch uses compact segmented tabs', () => {
   assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.feedback-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
 })
 
+test('merchant feedback navigation opens price feedback by default', () => {
+  assert.match(appSource, /function goToFeedback\(mode: MerchantFeedbackType = 'price_suggestion'\)/)
+  assert.match(appSource, /@click="goToFeedback\(\)"/)
+  assert.match(appSource, /feedbackMode\.value = mode/)
+})
+
 test('merchant feedback option fields use styled animated choice chips instead of native selects', () => {
   assert.match(appSource, /const issueFeedbackOptions: Array<\{ value: MerchantIssueType; label: string \}>/)
   assert.match(appSource, /const priceIssueFeedbackOptions: Array<\{ value: MerchantPriceIssueType; label: string \}>/)
   assert.doesNotMatch(appSource, /<select v-model="issueFeedbackForm\.issueType"/)
   assert.doesNotMatch(appSource, /<select v-model="priceFeedbackForm\.priceIssueType"/)
   assert.match(appSource, /class="feedback-choice-group"[\s\S]*role="radiogroup"[\s\S]*v-for="option in issueFeedbackOptions"[\s\S]*role="radio"[\s\S]*@click="issueFeedbackForm\.issueType = option\.value"/)
-  assert.match(appSource, /class="feedback-choice-group"[\s\S]*role="radiogroup"[\s\S]*v-for="option in priceIssueFeedbackOptions"[\s\S]*role="radio"[\s\S]*@click="priceFeedbackForm\.priceIssueType = option\.value"/)
+  assert.match(appSource, /class="feedback-choice-group"[\s\S]*role="radiogroup"[\s\S]*v-for="option in priceIssueFeedbackOptions"[\s\S]*role="radio"[\s\S]*@click="selectPriceIssueFeedback\(option\.value\)"/)
   assert.match(cssSource, /\.feedback-choice-group\s*\{[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap/)
   assert.match(cssSource, /\.feedback-choice\s*\{[\s\S]*border-radius:\s*var\(--radius-pill\)[\s\S]*transition:\s*transform 0\.18s cubic-bezier\(0\.22,\s*0\.86,\s*0\.26,\s*1\.08\)/)
   assert.match(cssSource, /\.feedback-choice\.active\s*\{[\s\S]*background:\s*rgba\(159,232,112,0\.22\)[\s\S]*color:\s*var\(--positive-deep\)/)
   assert.match(cssSource, /\.feedback-choice:active\s*\{[\s\S]*transform:\s*scale\(0\.98\)/)
+})
+
+test('merchant issue feedback avoids product wording and uses contextual guidance', () => {
+  assert.doesNotMatch(appSource, /商品问题/)
+  assert.doesNotMatch(appSource, /商品状态问题/)
+  assert.match(appSource, /\{ value: 'product', label: '接单状态异常' \}/)
+  assert.match(appSource, /用于反馈页面异常、派单异常、接单状态异常、登录账号问题。/)
+  assert.match(appSource, /const issueFeedbackHelpText = computed/)
+  assert.match(appSource, /const issueFeedbackPlaceholder = computed/)
+  assert.match(appSource, /const issueFeedbackSubmitText = computed/)
+  assert.match(appSource, /<p class="feedback-field-hint">\{\{ issueFeedbackHelpText \}\}<\/p>/)
+  assert.match(appSource, /<textarea v-model="issueFeedbackForm\.description" :placeholder="issueFeedbackPlaceholder" \/>/)
+  assert.match(appSource, /feedbackSubmitting \? '提交中\.\.\.' : issueFeedbackSubmitText/)
+  assert.match(cssSource, /\.feedback-field-hint\s*\{[\s\S]*font-size:\s*12px[\s\S]*color:\s*var\(--mute\)/)
+})
+
+test('merchant price feedback shows suggested price only for unreasonable price reports', () => {
+  assert.match(apiSource, /export type MerchantPriceIssueType = 'price_unreasonable' \| 'wrong_model' \| 'other'/)
+  assert.match(appSource, /\{ value: 'price_unreasonable', label: '推荐价格不合理' \}/)
+  assert.doesNotMatch(appSource, /\{ value: 'too_high', label: '价格偏高' \}/)
+  assert.doesNotMatch(appSource, /\{ value: 'too_low', label: '价格偏低' \}/)
+  assert.match(appSource, /const priceFeedbackRequiresPrice = computed\(\(\) => priceFeedbackForm\.priceIssueType === 'price_unreasonable'\)/)
+  assert.match(appSource, /<div class="field" v-if="priceFeedbackRequiresPrice">[\s\S]*<label>建议价格<\/label>/)
+  assert.match(appSource, /function selectPriceIssueFeedback\(value: MerchantPriceIssueType\)[\s\S]*priceFeedbackForm\.pricePerDay = ''/)
+  assert.match(appSource, /price_per_day: priceFeedbackRequiresPrice\.value \? pricePerDay : null/)
+  assert.match(appSource, /if \(!priceFeedbackRequiresPrice\.value && !reason\) \{[\s\S]*feedbackError\.value = '请填写原因说明'/)
+  assert.match(appSource, /用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。/)
+  assert.match(appSource, /const priceFeedbackSubmitText = computed/)
+  assert.match(appSource, /feedbackSubmitting \? '提交中\.\.\.' : priceFeedbackSubmitText/)
 })
 
 test('merchant feedback page maps not found backend errors to friendly copy', () => {
@@ -550,7 +586,7 @@ test('merchant feedback list is sorted newest first and clears stale records whe
 test('merchant price feedback submits integer daily price and resyncs selected product rule id', () => {
   assert.match(appSource, /syncPriceFeedbackRuleId\(\)[\s\S]*const pricePerDay = Number\(priceFeedbackForm\.pricePerDay\)/)
   assert.match(appSource, /Number\.isInteger\(pricePerDay\)/)
-  assert.match(appSource, /price_per_day: pricePerDay/)
+  assert.match(appSource, /price_per_day: priceFeedbackRequiresPrice\.value \? pricePerDay : null/)
   assert.match(appSource, /inputmode="numeric"[\s\S]*min="1"[\s\S]*step="1"/)
 })
 

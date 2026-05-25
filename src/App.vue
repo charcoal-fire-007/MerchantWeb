@@ -73,7 +73,7 @@ const dispatchChartTooltip = reactive({
   y: 0,
 })
 const feedbackRecords = ref<MerchantFeedbackRecord[]>([])
-const feedbackMode = ref<MerchantFeedbackType>('issue')
+const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
 const feedbackLoading = ref(false)
 const feedbackSubmitting = ref(false)
 const feedbackNotice = ref('')
@@ -86,21 +86,20 @@ const issueFeedbackForm = reactive({
 const priceFeedbackForm = reactive({
   product: '',
   ruleId: '',
-  priceIssueType: 'too_high' as MerchantPriceIssueType,
+  priceIssueType: 'price_unreasonable' as MerchantPriceIssueType,
   pricePerDay: '',
   reason: '',
   contact: '',
 })
 const issueFeedbackOptions: Array<{ value: MerchantIssueType; label: string }> = [
-  { value: 'page', label: '页面问题' },
-  { value: 'dispatch', label: '派单问题' },
-  { value: 'product', label: '商品问题' },
+  { value: 'page', label: '页面异常' },
+  { value: 'dispatch', label: '派单异常' },
+  { value: 'product', label: '接单状态异常' },
   { value: 'account', label: '登录账号问题' },
   { value: 'other', label: '其他' },
 ]
 const priceIssueFeedbackOptions: Array<{ value: MerchantPriceIssueType; label: string }> = [
-  { value: 'too_high', label: '价格偏高' },
-  { value: 'too_low', label: '价格偏低' },
+  { value: 'price_unreasonable', label: '推荐价格不合理' },
   { value: 'wrong_model', label: '商品型号不准' },
   { value: 'other', label: '其他' },
 ]
@@ -195,6 +194,46 @@ const feedbackProductOptions = computed(() => {
     seen.add(name)
     return true
   })
+})
+const issueFeedbackHelpText = computed(() => ({
+  page: '页面展示、按钮点击、数据刷新等使用异常。',
+  dispatch: '派单通知、派单记录、订单分配等流程异常。',
+  product: '暂停接单、恢复接单、接单状态同步等控制异常。',
+  account: '登录、改密、账号显示、权限提示等账号问题。',
+  other: '其他影响商户端正常使用的问题。',
+})[issueFeedbackForm.issueType])
+const issueFeedbackPlaceholder = computed(() => ({
+  page: '例如：点击按钮没有反应，或页面数据一直不刷新。',
+  dispatch: '例如：已被派单但通知没有出现，或历史派单记录缺失。',
+  product: '例如：暂停/恢复接单后，状态没有同步更新。',
+  account: '例如：无法登录、重置密码失败，或账号信息显示不对。',
+  other: '请描述你遇到的问题、发生时间和影响范围。',
+})[issueFeedbackForm.issueType])
+const issueFeedbackSubmitText = computed(() => ({
+  page: '提交页面反馈',
+  dispatch: '提交派单反馈',
+  product: '提交接单状态反馈',
+  account: '提交账号反馈',
+  other: '提交问题反馈',
+})[issueFeedbackForm.issueType])
+const priceFeedbackRequiresPrice = computed(() => priceFeedbackForm.priceIssueType === 'price_unreasonable')
+const priceFeedbackReasonLabel = computed(() => {
+  if (priceFeedbackForm.priceIssueType === 'wrong_model') return '正确型号说明'
+  return '原因说明'
+})
+const priceFeedbackReasonPlaceholder = computed(() => {
+  if (priceFeedbackForm.priceIssueType === 'price_unreasonable') {
+    return '例如：同城同行价格在 60-70 元/天'
+  }
+  if (priceFeedbackForm.priceIssueType === 'wrong_model') {
+    return '例如：当前商品型号应为 Pocket 3 标准版，不是 Creator Combo'
+  }
+  return '请说明你遇到的价格推荐相关问题'
+})
+const priceFeedbackSubmitText = computed(() => {
+  if (priceFeedbackForm.priceIssueType === 'price_unreasonable') return '提交价格建议'
+  if (priceFeedbackForm.priceIssueType === 'wrong_model') return '提交型号反馈'
+  return '提交反馈'
 })
 
 if (tokenClaims.value?.password_reset === true) {
@@ -547,7 +586,7 @@ function goToNotifications() {
   newDispatchBurstCount.value = 0
 }
 
-function goToFeedback(mode: MerchantFeedbackType = 'issue') {
+function goToFeedback(mode: MerchantFeedbackType = 'price_suggestion') {
   feedbackMode.value = mode
   feedbackNotice.value = ''
   feedbackError.value = ''
@@ -559,7 +598,7 @@ function goToPriceFeedback(product: MerchantProduct) {
   feedbackMode.value = 'price_suggestion'
   priceFeedbackForm.product = product.product
   priceFeedbackForm.ruleId = product.rule_id
-  priceFeedbackForm.priceIssueType = 'too_high'
+  priceFeedbackForm.priceIssueType = 'price_unreasonable'
   priceFeedbackForm.pricePerDay = ''
   priceFeedbackForm.reason = ''
   priceFeedbackForm.contact = priceFeedbackForm.contact || accountLabel.value
@@ -572,6 +611,13 @@ function goToPriceFeedback(product: MerchantProduct) {
 function syncPriceFeedbackRuleId() {
   const selected = products.value.find((product) => product.product === priceFeedbackForm.product)
   priceFeedbackForm.ruleId = selected?.rule_id || ''
+}
+
+function selectPriceIssueFeedback(value: MerchantPriceIssueType) {
+  priceFeedbackForm.priceIssueType = value
+  if (value !== 'price_unreasonable') {
+    priceFeedbackForm.pricePerDay = ''
+  }
 }
 
 function sortFeedbackRecords(items: MerchantFeedbackRecord[]) {
@@ -649,12 +695,17 @@ async function submitPriceFeedback() {
   const product = priceFeedbackForm.product.trim()
   syncPriceFeedbackRuleId()
   const pricePerDay = Number(priceFeedbackForm.pricePerDay)
+  const reason = priceFeedbackForm.reason.trim()
   if (!product) {
     feedbackError.value = '请先选择商品'
     return
   }
-  if (!Number.isInteger(pricePerDay) || pricePerDay <= 0) {
+  if (priceFeedbackRequiresPrice.value && (!Number.isInteger(pricePerDay) || pricePerDay <= 0)) {
     feedbackError.value = '请填写有效的整数建议价格'
+    return
+  }
+  if (!priceFeedbackRequiresPrice.value && !reason) {
+    feedbackError.value = '请填写原因说明'
     return
   }
   feedbackSubmitting.value = true
@@ -666,8 +717,8 @@ async function submitPriceFeedback() {
       product,
       rule_id: priceFeedbackForm.ruleId || null,
       price_issue_type: priceFeedbackForm.priceIssueType,
-      price_per_day: pricePerDay,
-      reason: priceFeedbackForm.reason.trim() || null,
+      price_per_day: priceFeedbackRequiresPrice.value ? pricePerDay : null,
+      reason: reason || null,
       contact: priceFeedbackForm.contact.trim() || accountLabel.value,
     })
     prependFeedbackRecord(record)
@@ -1645,7 +1696,7 @@ async function run(task: () => Promise<void>) {
         <template v-if="navActive === 'feedback'">
           <div class="welcome">
             <h1>反馈中心</h1>
-            <p>提交页面、派单、商品状态问题，也可以反馈机器价格推荐建议。</p>
+            <p>提交页面、派单、接单状态、登录账号问题，也可以反馈机器价格推荐建议。</p>
           </div>
 
           <div class="feedback-tabs" role="tablist" aria-label="反馈类型">
@@ -1674,7 +1725,7 @@ async function run(task: () => Promise<void>) {
           <div class="feedback-form-card" v-if="feedbackMode === 'issue'">
             <div class="feedback-form-header">
               <h2>问题反馈</h2>
-              <p>用于页面异常、派单异常、商品状态问题、登录账号问题。</p>
+              <p>用于反馈页面异常、派单异常、接单状态异常、登录账号问题。</p>
             </div>
             <div class="field">
               <label>问题类型</label>
@@ -1691,24 +1742,25 @@ async function run(task: () => Promise<void>) {
                   {{ option.label }}
                 </button>
               </div>
+              <p class="feedback-field-hint">{{ issueFeedbackHelpText }}</p>
             </div>
             <div class="field">
               <label>问题描述</label>
-              <textarea v-model="issueFeedbackForm.description" placeholder="请描述遇到的问题，例如：商品状态切换后没有刷新。" />
+              <textarea v-model="issueFeedbackForm.description" :placeholder="issueFeedbackPlaceholder" />
             </div>
             <div class="field">
               <label>联系方式（选填）</label>
               <input v-model="issueFeedbackForm.contact" :placeholder="accountLabel" />
             </div>
             <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitIssueFeedback">
-              {{ feedbackSubmitting ? '提交中...' : '提交问题反馈' }}
+              {{ feedbackSubmitting ? '提交中...' : issueFeedbackSubmitText }}
             </button>
           </div>
 
           <div class="feedback-form-card" v-if="feedbackMode === 'price_suggestion'">
             <div class="feedback-form-header">
               <h2>机器价格推荐反馈</h2>
-              <p>用于反馈某台机器推荐价格偏高、偏低或型号不准。</p>
+              <p>用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。</p>
             </div>
             <div class="field">
               <label>商品</label>
@@ -1732,13 +1784,13 @@ async function run(task: () => Promise<void>) {
                   role="radio"
                   :aria-checked="priceFeedbackForm.priceIssueType === option.value"
                   :class="['feedback-choice', { active: priceFeedbackForm.priceIssueType === option.value }]"
-                  @click="priceFeedbackForm.priceIssueType = option.value"
+                  @click="selectPriceIssueFeedback(option.value)"
                 >
                   {{ option.label }}
                 </button>
               </div>
             </div>
-            <div class="field">
+            <div class="field" v-if="priceFeedbackRequiresPrice">
               <label>建议价格</label>
               <div class="price-input-wrap">
                 <input v-model="priceFeedbackForm.pricePerDay" type="number" inputmode="numeric" min="1" step="1" placeholder="例如 80" />
@@ -1746,15 +1798,15 @@ async function run(task: () => Promise<void>) {
               </div>
             </div>
             <div class="field">
-              <label>原因说明</label>
-              <textarea v-model="priceFeedbackForm.reason" placeholder="例如：同城同行价格在 60-70 元/天" />
+              <label>{{ priceFeedbackReasonLabel }}</label>
+              <textarea v-model="priceFeedbackForm.reason" :placeholder="priceFeedbackReasonPlaceholder" />
             </div>
             <div class="field">
               <label>联系方式（选填）</label>
               <input v-model="priceFeedbackForm.contact" :placeholder="accountLabel" />
             </div>
             <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitPriceFeedback">
-              {{ feedbackSubmitting ? '提交中...' : '提交价格建议' }}
+              {{ feedbackSubmitting ? '提交中...' : priceFeedbackSubmitText }}
             </button>
           </div>
 

@@ -61,7 +61,7 @@ export interface MerchantNotificationsResponse {
 export type MerchantFeedbackType = 'issue' | 'price_suggestion'
 export type MerchantFeedbackStatus = 'submitted' | 'processing' | 'resolved'
 export type MerchantIssueType = 'page' | 'dispatch' | 'product' | 'account' | 'other'
-export type MerchantPriceIssueType = 'too_high' | 'too_low' | 'wrong_model' | 'other'
+export type MerchantPriceIssueType = 'price_unreasonable' | 'wrong_model' | 'other'
 
 export interface MerchantFeedbackRecord {
   id: string
