@@ -831,7 +831,7 @@ async function submitExistingProductApplication() {
     })
     prependProductApplicationRecord(record)
     existingProductApplicationForm.reason = ''
-    feedbackNotice.value = '商品申请已提交，审批通过后会自动开通，默认权重 1'
+    feedbackNotice.value = '商品申请已提交，平台审批通过后会为你开通'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '商品申请提交失败')
   } finally {
@@ -865,7 +865,7 @@ async function submitNewProductApplication() {
     newProductApplicationForm.product = ''
     newProductApplicationForm.modelNote = ''
     newProductApplicationForm.reason = ''
-    feedbackNotice.value = '新增商品申请已提交，需要平台人工在派单平台添加'
+    feedbackNotice.value = '新增商品申请已提交，平台将尽快处理'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '新增商品申请提交失败')
   } finally {
@@ -984,9 +984,9 @@ function feedbackRecordDetail(record: MerchantFeedbackRecord) {
 function productApplicationSummary(record: MerchantProductApplicationRecord) {
   if (record.application_type === 'new_product') {
     const modelNote = record.model_note ? ` · ${record.model_note}` : ''
-    return `${record.reason || '关键词映射库暂无，需要人工在派单平台添加'}${modelNote}`
+    return `${record.reason || '平台将尽快处理该商品添加申请'}${modelNote}`
   }
-  return record.reason || '审批通过后自动加入商品映射，默认权重 1'
+  return record.reason || '审批通过后将为你开通该商品接单'
 }
 
 function markDashboardNotificationsRead() {
@@ -1962,7 +1962,7 @@ async function run(task: () => Promise<void>) {
           <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
             <div class="feedback-form-header">
               <h2>商品申请</h2>
-              <p>已有商品审批通过后自动开通，默认权重 1；新增商品需要平台人工在派单平台添加。</p>
+              <p>申请开通已有商品，或提交新增商品申请。</p>
             </div>
             <div class="field">
               <label>申请类型</label>
@@ -1986,13 +1986,14 @@ async function run(task: () => Promise<void>) {
                   申请新增商品
                 </button>
               </div>
+              <p class="feedback-field-hint">已有商品：商品库中存在的商品名称</p>
             </div>
 
             <template v-if="productApplicationMode === 'existing_product'">
               <div class="field">
                 <label>可申请商品</label>
                 <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
-                <div v-else-if="productApplicationOptions.length === 0" class="notif-empty">暂无可申请商品；如果关键词库里也没有，请切换到“申请新增商品”。</div>
+                <div v-else-if="productApplicationOptions.length === 0" class="notif-empty">暂无可申请商品，请切换到“申请新增商品”。</div>
                 <div v-else class="feedback-choice-group product-application-options" role="radiogroup" aria-label="可申请商品">
                   <button
                     v-for="option in productApplicationOptions"
@@ -2006,11 +2007,10 @@ async function run(task: () => Promise<void>) {
                     {{ option.product }}
                   </button>
                 </div>
-                <p class="feedback-field-hint">这里由中转平台返回“关键词映射库已有、但当前商户未开通”的商品，避免重复申请。</p>
               </div>
               <div class="field">
                 <label>申请说明</label>
-                <textarea v-model="existingProductApplicationForm.reason" placeholder="例如：我有该设备，可接单；库存 2 台，支持同城配送。" />
+                <textarea v-model="existingProductApplicationForm.reason" placeholder="例如：我有该设备，可接单。" />
               </div>
               <div class="field">
                 <label>联系方式（选填）</label>
@@ -2032,13 +2032,12 @@ async function run(task: () => Promise<void>) {
               </div>
               <div class="field">
                 <label>申请说明</label>
-                <textarea v-model="newProductApplicationForm.reason" placeholder="例如：关键词映射库没有这个商品，但我有这台机器，希望平台添加。" />
+                <textarea v-model="newProductApplicationForm.reason" placeholder="例如：我有这台机器，希望平台添加。" />
               </div>
               <div class="field">
                 <label>联系方式（选填）</label>
                 <input v-model="newProductApplicationForm.contact" :placeholder="accountLabel" />
               </div>
-              <p class="feedback-field-hint">新增商品审批后进入待人工添加，需要平台在派单平台新增机器并配置商户映射。</p>
               <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitNewProductApplication">
                 {{ productApplicationSubmitting ? '提交中...' : '提交新增商品' }}
               </button>
