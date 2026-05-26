@@ -643,8 +643,48 @@ a:focus-visible,
 .feedback-choice:active {
   transform: scale(0.98);
 }
-.product-application-options {
-  max-height: 210px; overflow: auto; padding: 2px;
+.product-application-picker {
+  display: grid; gap: 10px;
+}
+.product-application-search {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center;
+}
+.product-application-search input {
+  min-height: 42px;
+}
+.product-application-clear {
+  color: var(--mute);
+}
+.product-application-list {
+  display: grid; gap: 8px;
+  max-height: 280px; overflow: auto; padding: 2px;
+}
+.product-application-list-item {
+  width: 100%; min-height: 58px; padding: 12px 14px;
+  border: 1px solid rgba(0,0,0,0.06); border-radius: 16px;
+  background: rgba(255,255,255,0.78); color: var(--ink);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  text-align: left; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.55);
+  transition: transform 0.18s cubic-bezier(0.22, 0.86, 0.26, 1.08), background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.product-application-list-item:hover {
+  transform: translateY(-1px);
+  background: var(--canvas);
+  border-color: rgba(159,232,112,0.5);
+}
+.product-application-list-item.active {
+  background: rgba(159,232,112,0.2);
+  border-color: rgba(159,232,112,0.78);
+  box-shadow: inset 0 0 0 1px rgba(159,232,112,0.24), 0 8px 18px rgba(159,232,112,0.12);
+  animation: feedbackChoicePop 0.22s cubic-bezier(0.22, 0.86, 0.26, 1.08);
+}
+.product-application-list-title {
+  min-width: 0; font-size: 14px; font-weight: 900; overflow-wrap: anywhere;
+}
+.product-application-list-meta {
+  max-width: 240px; color: var(--mute); font-size: 12px; font-weight: 800;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .feedback-submit { justify-self: end; min-width: 150px; }
 .feedback-notice,
@@ -966,6 +1006,15 @@ a:focus-visible,
   .feedback-tab { min-height: 44px; font-size: 13px; }
   .feedback-choice-group { gap: 7px; }
   .feedback-choice { flex: 1 1 calc(50% - 7px); min-height: 38px; padding: 0 12px; font-size: 12px; }
+  .product-application-search { grid-template-columns: minmax(0, 1fr) auto; }
+  .product-application-clear { grid-column: 1 / -1; }
+  .product-application-list { max-height: 320px; }
+  .product-application-list-item {
+    min-height: 64px; grid-template-columns: minmax(0, 1fr); gap: 4px;
+  }
+  .product-application-list-meta {
+    max-width: 100%; white-space: nowrap;
+  }
   .feedback-form-card,
   .feedback-record-panel { padding: 16px; }
   .feedback-submit { width: 100%; justify-self: stretch; }

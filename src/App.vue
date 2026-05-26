@@ -88,6 +88,8 @@ const dispatchChartTooltip = reactive({
 })
 const feedbackRecords = ref<MerchantFeedbackRecord[]>([])
 const productApplicationOptions = ref<MerchantProductApplicationOption[]>([])
+const productApplicationSearchInput = ref('')
+const productApplicationSearchQuery = ref('')
 const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
@@ -224,6 +226,15 @@ const feedbackProductOptions = computed(() => {
     if (!name || seen.has(name)) return false
     seen.add(name)
     return true
+  })
+})
+const filteredProductApplicationOptions = computed(() => {
+  const keyword = productApplicationSearchQuery.value.trim().toLowerCase()
+  if (!keyword) return productApplicationOptions.value
+  return productApplicationOptions.value.filter((option) => {
+    const product = option.product.toLowerCase()
+    const keywords = (option.keywords || []).join(' ').toLowerCase()
+    return product.includes(keyword) || keywords.includes(keyword)
   })
 })
 const selectedProductApplicationOption = computed(() =>
@@ -689,6 +700,23 @@ function syncSelectedProductApplicationOption() {
   if (firstOption) {
     existingProductApplicationForm.productId = firstOption.product_id
   }
+}
+
+function applyProductApplicationSearch() {
+  productApplicationSearchQuery.value = productApplicationSearchInput.value.trim()
+}
+
+function clearProductApplicationSearch() {
+  productApplicationSearchInput.value = ''
+  productApplicationSearchQuery.value = ''
+}
+
+function selectProductApplicationOption(productId: string) {
+  existingProductApplicationForm.productId = productId
+}
+
+function productApplicationListMeta() {
+  return '点选后提交申请'
 }
 
 function syncPriceFeedbackRuleId() {
@@ -1994,18 +2022,45 @@ async function run(task: () => Promise<void>) {
                 <label>可申请商品</label>
                 <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
                 <div v-else-if="productApplicationOptions.length === 0" class="notif-empty">暂无可申请商品，请切换到“申请新增商品”。</div>
-                <div v-else class="feedback-choice-group product-application-options" role="radiogroup" aria-label="可申请商品">
-                  <button
-                    v-for="option in productApplicationOptions"
-                    :key="option.product_id"
-                    type="button"
-                    role="radio"
-                    :aria-checked="existingProductApplicationForm.productId === option.product_id"
-                    :class="['feedback-choice', { active: existingProductApplicationForm.productId === option.product_id }]"
-                    @click="existingProductApplicationForm.productId = option.product_id"
+                <div v-else class="product-application-picker">
+                  <div class="product-application-search">
+                    <input
+                      v-model="productApplicationSearchInput"
+                      placeholder="搜索商品名称"
+                      @keyup.enter="applyProductApplicationSearch"
+                    />
+                    <button type="button" class="btn btn-ghost" @click="applyProductApplicationSearch">搜索</button>
+                    <button
+                      v-if="productApplicationSearchQuery"
+                      type="button"
+                      class="btn btn-ghost product-application-clear"
+                      @click="clearProductApplicationSearch"
+                    >
+                      清空
+                    </button>
+                  </div>
+                  <div
+                    v-if="filteredProductApplicationOptions.length > 0"
+                    class="product-application-list"
+                    role="radiogroup"
+                    aria-label="可申请商品"
                   >
-                    {{ option.product }}
-                  </button>
+                    <button
+                      v-for="option in filteredProductApplicationOptions"
+                      :key="option.product_id"
+                      type="button"
+                      role="radio"
+                      :aria-checked="existingProductApplicationForm.productId === option.product_id"
+                      :class="['product-application-list-item', { active: existingProductApplicationForm.productId === option.product_id }]"
+                      @click="selectProductApplicationOption(option.product_id)"
+                    >
+                      <span class="product-application-list-title">{{ option.product }}</span>
+                      <span class="product-application-list-meta">
+                        {{ productApplicationListMeta() }}
+                      </span>
+                    </button>
+                  </div>
+                  <div v-else class="notif-empty">没有找到匹配商品，换个关键词试试。</div>
                 </div>
               </div>
               <div class="field">
