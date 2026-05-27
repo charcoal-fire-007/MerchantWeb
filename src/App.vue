@@ -12,7 +12,6 @@ import {
   type MerchantPriceIssueType,
   type MerchantProductApplicationOption,
   type MerchantProductApplicationRecord,
-  type MerchantProductApplicationType,
   type MerchantProduct,
 } from './api'
 import {
@@ -103,7 +102,6 @@ const productApplicationOptionsLoading = ref(false)
 const productApplicationSubmitting = ref(false)
 const feedbackNotice = ref('')
 const feedbackError = ref('')
-const productApplicationMode = ref<MerchantProductApplicationType>('existing_product')
 const existingProductApplicationForm = reactive({
   productId: '',
   reason: '',
@@ -248,6 +246,27 @@ const filteredProductApplicationOptions = computed(() => {
 const selectedProductApplicationOption = computed(() =>
   productApplicationOptions.value.find((option) => option.product_id === existingProductApplicationForm.productId)
 )
+const productApplicationDraftName = computed(() =>
+  (productApplicationSearchInput.value || productApplicationSearchQuery.value).trim()
+)
+const productApplicationIsNew = computed(() =>
+  Boolean(newProductApplicationForm.product.trim()) && !selectedProductApplicationOption.value
+)
+const productApplicationSelectedName = computed(() =>
+  selectedProductApplicationOption.value?.product || newProductApplicationForm.product.trim()
+)
+const productApplicationReason = computed({
+  get() {
+    return productApplicationIsNew.value ? newProductApplicationForm.reason : existingProductApplicationForm.reason
+  },
+  set(value: string) {
+    if (productApplicationIsNew.value) {
+      newProductApplicationForm.reason = value
+      return
+    }
+    existingProductApplicationForm.reason = value
+  },
+})
 const submissionRecords = computed<SubmissionRecord[]>(() => {
   const productApplicationItems = productApplicationRecords.value.map((record) => ({
     id: `application-${record.id}`,
@@ -747,15 +766,6 @@ function switchFeedbackCenterMode(mode: FeedbackCenterMode) {
   }
 }
 
-function switchProductApplicationMode(mode: MerchantProductApplicationType) {
-  productApplicationMode.value = mode
-  feedbackNotice.value = ''
-  feedbackError.value = ''
-  if (mode === 'existing_product') {
-    void refreshProductApplicationOptions()
-  }
-}
-
 function syncSelectedProductApplicationOption() {
   if (!existingProductApplicationForm.productId) return
   const selectedExists = productApplicationOptions.value.some(
@@ -812,9 +822,27 @@ function handleProductApplicationSearchInput() {
 
 function selectProductApplicationOption(productId: string) {
   existingProductApplicationForm.productId = productId
+  newProductApplicationForm.product = ''
+  newProductApplicationForm.modelNote = ''
+  newProductApplicationForm.reason = ''
   productApplicationSearchInput.value = ''
   productApplicationSearchQuery.value = ''
   productApplicationPickerOpen.value = false
+}
+
+function chooseNewProductApplicationFromSearch() {
+  const product = productApplicationDraftName.value
+  if (!product) {
+    feedbackError.value = '请先输入想申请的商品名称'
+    return
+  }
+  existingProductApplicationForm.productId = ''
+  newProductApplicationForm.product = product
+  productApplicationSearchInput.value = product
+  productApplicationSearchQuery.value = product
+  productApplicationPickerOpen.value = false
+  feedbackNotice.value = ''
+  feedbackError.value = ''
 }
 
 function toggleSubmissionRecords() {
@@ -981,11 +1009,19 @@ function feedbackErrorMessage(err: unknown, fallback: string) {
   return fallback
 }
 
+async function submitProductApplication() {
+  if (productApplicationIsNew.value) {
+    await submitNewProductApplication()
+    return
+  }
+  await submitExistingProductApplication()
+}
+
 async function submitExistingProductApplication() {
   const option = selectedProductApplicationOption.value
   const reason = existingProductApplicationForm.reason.trim()
   if (!option) {
-    feedbackError.value = '请先选择要申请的商品'
+    feedbackError.value = '请先选择商品，或搜索后申请新增商品'
     return
   }
   if (!reason) {
@@ -1005,7 +1041,10 @@ async function submitExistingProductApplication() {
       contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
+    existingProductApplicationForm.productId = ''
     existingProductApplicationForm.reason = ''
+    productApplicationSearchInput.value = ''
+    productApplicationSearchQuery.value = ''
     feedbackNotice.value = '商品申请已提交，平台审批通过后会为你开通'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '商品申请提交失败')
@@ -1040,6 +1079,8 @@ async function submitNewProductApplication() {
     newProductApplicationForm.product = ''
     newProductApplicationForm.modelNote = ''
     newProductApplicationForm.reason = ''
+    productApplicationSearchInput.value = ''
+    productApplicationSearchQuery.value = ''
     feedbackNotice.value = '新增商品申请已提交，平台将尽快处理'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '新增商品申请提交失败')
@@ -2137,155 +2178,141 @@ async function run(task: () => Promise<void>) {
           <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
             <div class="feedback-form-header">
               <h2>商品申请</h2>
-              <p>申请开通已有商品，或提交新增商品申请。</p>
+              <p>先搜索商品，找不到时可以直接申请新增商品。</p>
             </div>
             <div class="field">
-              <label>申请类型</label>
-              <div class="feedback-choice-group" role="radiogroup" aria-label="商品申请类型">
-                <button
-                  type="button"
-                  role="radio"
-                  :aria-checked="productApplicationMode === 'existing_product'"
-                  :class="['feedback-choice', { active: productApplicationMode === 'existing_product' }]"
-                  @click="switchProductApplicationMode('existing_product')"
-                >
-                  申请已有商品
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  :aria-checked="productApplicationMode === 'new_product'"
-                  :class="['feedback-choice', { active: productApplicationMode === 'new_product' }]"
-                  @click="switchProductApplicationMode('new_product')"
-                >
-                  申请新增商品
-                </button>
-              </div>
+              <label>申请商品</label>
               <p class="feedback-field-hint">已有商品：商品库中存在的商品名称</p>
-            </div>
-
-            <template v-if="productApplicationMode === 'existing_product'">
-              <div class="field">
-                <label>可申请商品</label>
+              <div class="product-application-picker">
                 <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
-                <div v-else-if="productApplicationOptions.length === 0" class="notif-empty">暂无可申请商品，请切换到“申请新增商品”。</div>
-                <div v-else class="product-application-picker">
-                  <div class="product-application-combobox" :class="{ open: productApplicationPickerOpen }">
-                    <div class="product-application-search">
+                <div class="product-application-combobox" :class="{ open: productApplicationPickerOpen }">
+                  <div class="product-application-search">
+                    <input
+                      v-model="productApplicationSearchInput"
+                      placeholder="搜索商品，或输入想申请的新商品"
+                      autocomplete="off"
+                      role="combobox"
+                      aria-controls="product-application-listbox"
+                      :aria-expanded="productApplicationPickerOpen"
+                      :readonly="mobilePickerMode"
+                      @focus="openProductApplicationPicker"
+                      @blur="closeProductApplicationPickerSoon"
+                      @input="handleProductApplicationSearchInput"
+                      @keyup.enter="applyProductApplicationSearch"
+                    />
+                    <button type="button" class="btn btn-ghost" @click="applyProductApplicationSearch">搜索</button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost product-application-toggle"
+                      @mousedown.prevent="toggleProductApplicationPicker"
+                    >
+                      {{ productApplicationPickerOpen ? '收起' : '选择' }}
+                    </button>
+                    <button
+                      v-if="productApplicationSearchQuery"
+                      type="button"
+                      class="btn btn-ghost product-application-clear"
+                      @mousedown.prevent="clearProductApplicationSearch"
+                    >
+                      清空
+                    </button>
+                  </div>
+                  <div
+                    v-if="productApplicationPickerOpen"
+                    id="product-application-listbox"
+                    class="product-application-panel"
+                    role="listbox"
+                  >
+                    <button
+                      v-for="option in filteredProductApplicationOptions"
+                      :key="option.product_id"
+                      type="button"
+                      role="option"
+                      :aria-selected="existingProductApplicationForm.productId === option.product_id"
+                      :class="['product-application-option', { active: existingProductApplicationForm.productId === option.product_id }]"
+                      @mousedown.prevent="selectProductApplicationOption(option.product_id)"
+                    >
+                      <strong>{{ option.product }}</strong>
+                      <span>选择</span>
+                    </button>
+                    <div v-if="filteredProductApplicationOptions.length === 0" class="product-application-empty">
+                      <strong>没有找到「{{ productApplicationDraftName || '该商品' }}」</strong>
+                      <button
+                        v-if="productApplicationDraftName"
+                        type="button"
+                        class="product-application-create"
+                        @mousedown.prevent="chooseNewProductApplicationFromSearch"
+                      >
+                        申请新增商品「{{ productApplicationDraftName }}」
+                      </button>
+                      <span v-else>暂时没有可直接申请的商品，你可以输入商品名称后申请新增商品。</span>
+                    </div>
+                  </div>
+                  <div
+                    v-if="productApplicationPickerOpen"
+                    class="product-application-mobile-backdrop"
+                    @click="closeProductApplicationPicker"
+                  ></div>
+                  <div v-if="productApplicationPickerOpen" class="product-application-mobile-sheet" role="dialog" aria-label="选择可申请商品">
+                    <div class="product-application-mobile-header">
+                      <strong>选择或新增商品</strong>
+                      <button type="button" @click="closeProductApplicationPicker">关闭</button>
+                    </div>
+                    <div class="product-application-mobile-search">
                       <input
                         v-model="productApplicationSearchInput"
-                        placeholder="请选择要申请的商品"
+                        placeholder="搜索商品，或输入想申请的新商品"
                         autocomplete="off"
-                        role="combobox"
-                        aria-controls="product-application-listbox"
-                        :aria-expanded="productApplicationPickerOpen"
-                        :readonly="mobilePickerMode"
-                        @focus="openProductApplicationPicker"
-                        @blur="closeProductApplicationPickerSoon"
                         @input="handleProductApplicationSearchInput"
                         @keyup.enter="applyProductApplicationSearch"
                       />
-                      <button type="button" class="btn btn-ghost" @click="applyProductApplicationSearch">搜索</button>
-                      <button
-                        type="button"
-                        class="btn btn-ghost product-application-toggle"
-                        @mousedown.prevent="toggleProductApplicationPicker"
-                      >
-                        {{ productApplicationPickerOpen ? '收起' : '选择' }}
-                      </button>
-                      <button
-                        v-if="productApplicationSearchQuery"
-                        type="button"
-                        class="btn btn-ghost product-application-clear"
-                        @mousedown.prevent="clearProductApplicationSearch"
-                      >
-                        清空
-                      </button>
                     </div>
-                    <div
-                      v-if="productApplicationPickerOpen"
-                      id="product-application-listbox"
-                      class="product-application-panel"
-                      role="listbox"
-                    >
+                    <div class="product-application-mobile-list">
                       <button
                         v-for="option in filteredProductApplicationOptions"
-                        :key="option.product_id"
+                        :key="`mobile-${option.product_id}`"
                         type="button"
-                        role="option"
-                        :aria-selected="existingProductApplicationForm.productId === option.product_id"
                         :class="['product-application-option', { active: existingProductApplicationForm.productId === option.product_id }]"
-                        @mousedown.prevent="selectProductApplicationOption(option.product_id)"
+                        @click="selectProductApplicationOption(option.product_id)"
                       >
                         <strong>{{ option.product }}</strong>
                         <span>选择</span>
                       </button>
                       <div v-if="filteredProductApplicationOptions.length === 0" class="product-application-empty">
-                        没有找到商品，请切换到申请新增商品
-                      </div>
-                    </div>
-                    <div
-                      v-if="productApplicationPickerOpen"
-                      class="product-application-mobile-backdrop"
-                      @click="closeProductApplicationPicker"
-                    ></div>
-                    <div v-if="productApplicationPickerOpen" class="product-application-mobile-sheet" role="dialog" aria-label="选择可申请商品">
-                      <div class="product-application-mobile-header">
-                        <strong>选择商品</strong>
-                        <button type="button" @click="closeProductApplicationPicker">关闭</button>
-                      </div>
-                      <div class="product-application-mobile-list">
+                        <strong>没有找到「{{ productApplicationDraftName || '该商品' }}」</strong>
                         <button
-                          v-for="option in filteredProductApplicationOptions"
-                          :key="`mobile-${option.product_id}`"
+                          v-if="productApplicationDraftName"
                           type="button"
-                          :class="['product-application-option', { active: existingProductApplicationForm.productId === option.product_id }]"
-                          @click="selectProductApplicationOption(option.product_id)"
+                          class="product-application-create"
+                          @click="chooseNewProductApplicationFromSearch"
                         >
-                          <strong>{{ option.product }}</strong>
-                          <span>选择</span>
+                          申请新增商品「{{ productApplicationDraftName }}」
                         </button>
-                        <div v-if="filteredProductApplicationOptions.length === 0" class="product-application-empty">
-                          没有找到商品，请切换到申请新增商品
-                        </div>
+                        <span v-else>暂时没有可直接申请的商品，你可以输入商品名称后申请新增商品。</span>
                       </div>
                     </div>
-                  </div>
-                  <div v-if="selectedProductApplicationOption" class="product-application-selected">
-                    <span>
-                      <small>已选择</small>
-                      <strong>{{ selectedProductApplicationOption.product }}</strong>
-                    </span>
-                    <button type="button" @click="openProductApplicationPicker">更换</button>
                   </div>
                 </div>
+                <div v-if="productApplicationSelectedName" class="product-application-selected">
+                  <span>
+                    <small>{{ productApplicationIsNew ? '已选择新增商品' : '已选择商品' }}</small>
+                    <strong>{{ productApplicationSelectedName }}</strong>
+                  </span>
+                  <button type="button" @click="openProductApplicationPicker">更换</button>
+                </div>
               </div>
-              <div class="field">
-                <label>申请说明</label>
-                <textarea v-model="existingProductApplicationForm.reason" placeholder="例如：我有该设备，可接单。" />
-              </div>
-              <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitExistingProductApplication">
-                {{ productApplicationSubmitting ? '提交中...' : '提交商品申请' }}
-              </button>
-            </template>
-
-            <template v-if="productApplicationMode === 'new_product'">
-              <div class="field">
-                <label>商品名称</label>
-                <input v-model="newProductApplicationForm.product" placeholder="例如：索尼 ZV-E10 II" />
-              </div>
-              <div class="field">
-                <label>品牌/型号补充（选填）</label>
-                <input v-model="newProductApplicationForm.modelNote" placeholder="例如：双镜头套装，可日租" />
-              </div>
-              <div class="field">
-                <label>申请说明</label>
-                <textarea v-model="newProductApplicationForm.reason" placeholder="例如：我有这台机器，希望平台添加。" />
-              </div>
-              <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitNewProductApplication">
-                {{ productApplicationSubmitting ? '提交中...' : '提交新增商品' }}
-              </button>
-            </template>
+            </div>
+            <div class="field" v-if="productApplicationIsNew">
+              <label>品牌/型号补充（选填）</label>
+              <input v-model="newProductApplicationForm.modelNote" placeholder="例如：双镜头套装，可日租" />
+            </div>
+            <div class="field">
+              <label>申请说明</label>
+              <textarea v-model="productApplicationReason" placeholder="例如：我有该设备，可接单。" />
+            </div>
+            <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitProductApplication">
+              {{ productApplicationSubmitting ? '提交中...' : '提交商品申请' }}
+            </button>
           </div>
 
           <div class="feedback-form-card" v-if="feedbackCenterMode === 'feedback'">
