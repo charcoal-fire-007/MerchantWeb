@@ -94,6 +94,7 @@ const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
 const submissionRecordsExpanded = ref(false)
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
+const priceProductPickerOpen = ref(false)
 const feedbackLoading = ref(false)
 const feedbackSubmitting = ref(false)
 const productApplicationOptionsLoading = ref(false)
@@ -152,6 +153,7 @@ let productCardsObserver: IntersectionObserver | null = null
 const productCardReturnTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const notificationHighlightTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let bulkAvailabilityProgressTimer: ReturnType<typeof setInterval> | null = null
+let priceProductPickerCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const tokenClaims = computed(() => decodeTokenClaims(token.value))
 const merchantNameFromProducts = computed(() => {
@@ -224,6 +226,11 @@ const feedbackProductOptions = computed(() => {
     seen.add(name)
     return true
   })
+})
+const filteredFeedbackProductOptions = computed(() => {
+  const keyword = priceFeedbackForm.product.trim().toLowerCase()
+  if (!keyword) return feedbackProductOptions.value
+  return feedbackProductOptions.value.filter((product) => product.product.toLowerCase().includes(keyword))
 })
 const filteredProductApplicationOptions = computed(() => {
   const keyword = productApplicationSearchQuery.value.trim().toLowerCase()
@@ -336,6 +343,7 @@ onUnmounted(() => {
   clearProductCardReturnTimers()
   clearNotificationHighlightTimers()
   stopBulkAvailabilityProgress()
+  clearPriceProductPickerCloseTimer()
 })
 watch([filteredEnabled, filteredDisabled, navActive], () => {
   void nextTick(observeProductCards)
@@ -378,6 +386,13 @@ function clearNotificationHighlightTimers() {
   }
   notificationHighlightTimers.clear()
   highlightedNotificationIds.value = new Set()
+}
+
+function clearPriceProductPickerCloseTimer() {
+  if (priceProductPickerCloseTimer) {
+    clearTimeout(priceProductPickerCloseTimer)
+    priceProductPickerCloseTimer = null
+  }
 }
 
 function triggerProductCardReturn(ruleId: string) {
@@ -726,6 +741,49 @@ function toggleSubmissionRecords() {
 function syncPriceFeedbackRuleId() {
   const selected = products.value.find((product) => product.product === priceFeedbackForm.product)
   priceFeedbackForm.ruleId = selected?.rule_id || ''
+}
+
+function openPriceProductPicker() {
+  clearPriceProductPickerCloseTimer()
+  priceProductPickerOpen.value = true
+}
+
+function closePriceProductPicker() {
+  clearPriceProductPickerCloseTimer()
+  priceProductPickerOpen.value = false
+}
+
+function closePriceProductPickerSoon() {
+  clearPriceProductPickerCloseTimer()
+  priceProductPickerCloseTimer = setTimeout(() => {
+    priceProductPickerOpen.value = false
+    priceProductPickerCloseTimer = null
+  }, 120)
+}
+
+function togglePriceProductPicker() {
+  if (priceProductPickerOpen.value) {
+    closePriceProductPicker()
+    return
+  }
+  openPriceProductPicker()
+}
+
+function handlePriceProductInput() {
+  syncPriceFeedbackRuleId()
+  openPriceProductPicker()
+}
+
+function selectFeedbackProduct(product: MerchantProduct) {
+  priceFeedbackForm.product = product.product
+  priceFeedbackForm.ruleId = product.rule_id
+  closePriceProductPicker()
+}
+
+function clearFeedbackProduct() {
+  priceFeedbackForm.product = ''
+  priceFeedbackForm.ruleId = ''
+  openPriceProductPicker()
 }
 
 function selectPriceIssueFeedback(value: MerchantPriceIssueType) {
@@ -2156,15 +2214,93 @@ async function run(task: () => Promise<void>) {
               <p class="feedback-field-hint">用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。</p>
               <div class="field">
                 <label>商品</label>
-                <input
-                  v-model="priceFeedbackForm.product"
-                  list="feedback-product-options"
-                  placeholder="请选择或输入商品"
-                  @change="syncPriceFeedbackRuleId"
-                />
-                <datalist id="feedback-product-options">
-                  <option v-for="product in feedbackProductOptions" :key="product.rule_id" :value="product.product"></option>
-                </datalist>
+                <div class="feedback-product-picker" :class="{ open: priceProductPickerOpen }">
+                  <div class="feedback-product-input-wrap">
+                    <input
+                      v-model="priceFeedbackForm.product"
+                      placeholder="请选择或输入商品"
+                      autocomplete="off"
+                      role="combobox"
+                      aria-controls="feedback-product-listbox"
+                      :aria-expanded="priceProductPickerOpen"
+                      @focus="openPriceProductPicker"
+                      @blur="closePriceProductPickerSoon"
+                      @input="handlePriceProductInput"
+                      @change="syncPriceFeedbackRuleId"
+                    />
+                    <div class="feedback-product-actions">
+                      <button
+                        v-if="priceFeedbackForm.product"
+                        type="button"
+                        class="feedback-product-clear"
+                        @mousedown.prevent="clearFeedbackProduct"
+                      >
+                        清除
+                      </button>
+                      <button
+                        type="button"
+                        class="feedback-product-toggle"
+                        @mousedown.prevent="togglePriceProductPicker"
+                      >
+                        {{ priceProductPickerOpen ? '收起' : '选择' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    v-if="priceProductPickerOpen"
+                    id="feedback-product-listbox"
+                    class="feedback-product-panel"
+                    role="listbox"
+                  >
+                    <button
+                      v-for="product in filteredFeedbackProductOptions"
+                      :key="product.rule_id"
+                      type="button"
+                      role="option"
+                      :aria-selected="priceFeedbackForm.product === product.product"
+                      :class="['feedback-product-option', { active: priceFeedbackForm.product === product.product }]"
+                      @mousedown.prevent="selectFeedbackProduct(product)"
+                    >
+                      <span>
+                        <strong>{{ product.product }}</strong>
+                        <small>点选后自动带入商品</small>
+                      </span>
+                      <em v-if="priceFeedbackForm.product === product.product">已选</em>
+                    </button>
+                    <div v-if="filteredFeedbackProductOptions.length === 0" class="feedback-product-empty">
+                      没有找到商品，可直接输入商品名
+                    </div>
+                  </div>
+                  <div
+                    v-if="priceProductPickerOpen"
+                    class="feedback-product-mobile-backdrop"
+                    @click="closePriceProductPicker"
+                  ></div>
+                  <div v-if="priceProductPickerOpen" class="feedback-product-mobile-sheet" role="dialog" aria-label="选择商品">
+                    <div class="feedback-product-mobile-header">
+                      <strong>选择商品</strong>
+                      <button type="button" @click="closePriceProductPicker">关闭</button>
+                    </div>
+                    <div class="feedback-product-mobile-list">
+                      <button
+                        v-for="product in filteredFeedbackProductOptions"
+                        :key="`mobile-${product.rule_id}`"
+                        type="button"
+                        :class="['feedback-product-option', { active: priceFeedbackForm.product === product.product }]"
+                        @click="selectFeedbackProduct(product)"
+                      >
+                        <span>
+                          <strong>{{ product.product }}</strong>
+                          <small>点选后自动带入商品</small>
+                        </span>
+                        <em v-if="priceFeedbackForm.product === product.product">已选</em>
+                      </button>
+                      <div v-if="filteredFeedbackProductOptions.length === 0" class="feedback-product-empty">
+                        没有找到商品，可直接输入商品名
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="field">
                 <label>当前问题</label>

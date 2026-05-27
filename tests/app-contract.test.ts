@@ -619,6 +619,25 @@ test('merchant price feedback shows suggested price only for unreasonable price 
   assert.match(appSource, /feedbackSubmitting \? '提交中\.\.\.' : priceFeedbackSubmitText/)
 })
 
+test('merchant price feedback uses a custom product picker instead of native datalist', () => {
+  assert.doesNotMatch(appSource, /list="feedback-product-options"/)
+  assert.doesNotMatch(appSource, /<datalist id="feedback-product-options"/)
+  assert.match(appSource, /const priceProductPickerOpen = ref\(false\)/)
+  assert.match(appSource, /const filteredFeedbackProductOptions = computed/)
+  assert.match(appSource, /function selectFeedbackProduct\(product: MerchantProduct\)/)
+  assert.match(appSource, /class="feedback-product-picker"/)
+  assert.match(appSource, /class="feedback-product-panel"/)
+  assert.match(appSource, /v-for="product in filteredFeedbackProductOptions"/)
+  assert.match(appSource, /@mousedown\.prevent="selectFeedbackProduct\(product\)"/)
+  assert.match(appSource, /class="feedback-product-mobile-sheet"/)
+  assert.match(cssSource, /\.feedback-product-picker\s*\{/)
+  assert.match(cssSource, /\.feedback-product-panel\s*\{/)
+  assert.match(cssSource, /\.feedback-product-option\s*\{/)
+  assert.match(cssSource, /\.feedback-product-mobile-sheet\s*\{/)
+  assert.match(cssSource, /@media\s*\(max-width:\s*768px\)[\s\S]*\.feedback-product-panel\s*\{[\s\S]*display:\s*none/)
+  assert.match(cssSource, /@media\s*\(min-width:\s*769px\)[\s\S]*\.feedback-product-mobile-sheet\s*\{[\s\S]*display:\s*none/)
+})
+
 test('merchant feedback page maps not found backend errors to friendly copy', () => {
   assert.match(appSource, /function feedbackErrorMessage\(err: unknown, fallback: string\)/)
   assert.match(appSource, /message === 'Not Found'/)
