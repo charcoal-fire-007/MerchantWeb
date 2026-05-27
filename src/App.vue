@@ -2178,11 +2178,9 @@ async function run(task: () => Promise<void>) {
           <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
             <div class="feedback-form-header">
               <h2>商品申请</h2>
-              <p>先搜索商品，找不到时可以直接申请新增商品。</p>
             </div>
             <div class="field">
               <label>申请商品</label>
-              <p class="feedback-field-hint">已有商品：商品库中存在的商品名称</p>
               <div class="product-application-picker">
                 <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
                 <div class="product-application-combobox" :class="{ open: productApplicationPickerOpen }">
@@ -2502,7 +2500,6 @@ async function run(task: () => Promise<void>) {
             <div class="feedback-record-header">
               <div>
                 <h2>我的提交记录</h2>
-                <p>状态包含：已提交 / 审核中 / 待人工添加 / 已开通 / 已驳回 / 处理中 / 已处理。</p>
               </div>
               <div class="feedback-record-actions">
                 <button
