@@ -523,6 +523,8 @@ test('merchant feedback center provides product applications and feedback flows'
   assert.match(appSource, /申请已有商品/)
   assert.match(appSource, /已有商品：商品库中存在的商品名称/)
   assert.match(appSource, /申请新增商品/)
+  assert.doesNotMatch(appSource, /existingProductApplicationForm\.contact/)
+  assert.doesNotMatch(appSource, /newProductApplicationForm\.contact/)
   assert.match(appSource, /待人工添加/)
   assert.match(appSource, /我的提交记录/)
   assert.match(appSource, /v-for="record in visibleSubmissionRecords"/)

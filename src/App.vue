@@ -104,13 +104,11 @@ const productApplicationMode = ref<MerchantProductApplicationType>('existing_pro
 const existingProductApplicationForm = reactive({
   productId: '',
   reason: '',
-  contact: '',
 })
 const newProductApplicationForm = reactive({
   product: '',
   modelNote: '',
   reason: '',
-  contact: '',
 })
 const issueFeedbackForm = reactive({
   issueType: 'page' as MerchantIssueType,
@@ -864,7 +862,7 @@ async function submitExistingProductApplication() {
       rule_id: option.rule_id || option.product_id,
       product: option.product,
       reason,
-      contact: existingProductApplicationForm.contact.trim() || accountLabel.value,
+      contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
     existingProductApplicationForm.reason = ''
@@ -896,7 +894,7 @@ async function submitNewProductApplication() {
       product,
       model_note: newProductApplicationForm.modelNote.trim() || null,
       reason,
-      contact: newProductApplicationForm.contact.trim() || accountLabel.value,
+      contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
     newProductApplicationForm.product = ''
@@ -2076,10 +2074,6 @@ async function run(task: () => Promise<void>) {
                 <label>申请说明</label>
                 <textarea v-model="existingProductApplicationForm.reason" placeholder="例如：我有该设备，可接单。" />
               </div>
-              <div class="field">
-                <label>联系方式（选填）</label>
-                <input v-model="existingProductApplicationForm.contact" :placeholder="accountLabel" />
-              </div>
               <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitExistingProductApplication">
                 {{ productApplicationSubmitting ? '提交中...' : '提交商品申请' }}
               </button>
@@ -2097,10 +2091,6 @@ async function run(task: () => Promise<void>) {
               <div class="field">
                 <label>申请说明</label>
                 <textarea v-model="newProductApplicationForm.reason" placeholder="例如：我有这台机器，希望平台添加。" />
-              </div>
-              <div class="field">
-                <label>联系方式（选填）</label>
-                <input v-model="newProductApplicationForm.contact" :placeholder="accountLabel" />
               </div>
               <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitNewProductApplication">
                 {{ productApplicationSubmitting ? '提交中...' : '提交新增商品' }}
