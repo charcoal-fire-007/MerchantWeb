@@ -91,6 +91,7 @@ const productApplicationOptions = ref<MerchantProductApplicationOption[]>([])
 const productApplicationSearchInput = ref('')
 const productApplicationSearchQuery = ref('')
 const productApplicationPickerOpen = ref(false)
+const mobilePickerMode = ref(false)
 const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
 const submissionRecordsExpanded = ref(false)
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
@@ -151,6 +152,7 @@ const visibleDashboardCardIds = ref<Set<string>>(new Set())
 const productCardsInViewportIds = ref<Set<string>>(new Set())
 const returningProductCardIds = ref<Set<string>>(new Set())
 let productCardsObserver: IntersectionObserver | null = null
+let mobilePickerMediaQuery: MediaQueryList | null = null
 const productCardReturnTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const notificationHighlightTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let bulkAvailabilityProgressTimer: ReturnType<typeof setInterval> | null = null
@@ -338,10 +340,12 @@ if (isLoggedIn.value) {
 }
 onMounted(() => {
   observeProductCards()
+  setupMobilePickerMode()
 })
 onUnmounted(() => {
   stopNotificationsPolling()
   disconnectProductCardsObserver()
+  cleanupMobilePickerMode()
   clearProductCardReturnTimers()
   clearNotificationHighlightTimers()
   stopBulkAvailabilityProgress()
@@ -373,6 +377,39 @@ watch(navActive, () => {
 function disconnectProductCardsObserver() {
   productCardsObserver?.disconnect()
   productCardsObserver = null
+}
+
+function setupMobilePickerMode() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+  mobilePickerMediaQuery = window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)')
+  updateMobilePickerMode()
+  if (typeof mobilePickerMediaQuery.addEventListener === 'function') {
+    mobilePickerMediaQuery.addEventListener('change', updateMobilePickerMode)
+  } else {
+    mobilePickerMediaQuery.addListener(updateMobilePickerMode)
+  }
+}
+
+function cleanupMobilePickerMode() {
+  if (!mobilePickerMediaQuery) return
+  if (typeof mobilePickerMediaQuery.removeEventListener === 'function') {
+    mobilePickerMediaQuery.removeEventListener('change', updateMobilePickerMode)
+  } else {
+    mobilePickerMediaQuery.removeListener(updateMobilePickerMode)
+  }
+  mobilePickerMediaQuery = null
+}
+
+function updateMobilePickerMode() {
+  mobilePickerMode.value = Boolean(mobilePickerMediaQuery?.matches)
+}
+
+function blurActivePickerInputOnMobile() {
+  if (!mobilePickerMode.value || typeof document === 'undefined') return
+  const activeElement = document.activeElement
+  if (activeElement instanceof HTMLElement) {
+    activeElement.blur()
+  }
 }
 
 function clearProductCardReturnTimers() {
@@ -743,6 +780,7 @@ function clearProductApplicationSearch() {
 function openProductApplicationPicker() {
   clearProductApplicationPickerCloseTimer()
   productApplicationPickerOpen.value = true
+  void nextTick(blurActivePickerInputOnMobile)
 }
 
 function closeProductApplicationPicker() {
@@ -790,6 +828,7 @@ function syncPriceFeedbackRuleId() {
 function openPriceProductPicker() {
   clearPriceProductPickerCloseTimer()
   priceProductPickerOpen.value = true
+  void nextTick(blurActivePickerInputOnMobile)
 }
 
 function closePriceProductPicker() {
@@ -2138,6 +2177,7 @@ async function run(task: () => Promise<void>) {
                         role="combobox"
                         aria-controls="product-application-listbox"
                         :aria-expanded="productApplicationPickerOpen"
+                        :readonly="mobilePickerMode"
                         @focus="openProductApplicationPicker"
                         @blur="closeProductApplicationPickerSoon"
                         @input="handleProductApplicationSearchInput"
@@ -2316,6 +2356,7 @@ async function run(task: () => Promise<void>) {
                       role="combobox"
                       aria-controls="feedback-product-listbox"
                       :aria-expanded="priceProductPickerOpen"
+                      :readonly="mobilePickerMode"
                       @focus="openPriceProductPicker"
                       @blur="closePriceProductPickerSoon"
                       @input="handlePriceProductInput"
