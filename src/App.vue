@@ -789,6 +789,7 @@ function closeProductApplicationPicker() {
 }
 
 function closeProductApplicationPickerSoon() {
+  if (mobilePickerMode.value) return
   clearProductApplicationPickerCloseTimer()
   productApplicationPickerCloseTimer = setTimeout(() => {
     productApplicationPickerOpen.value = false
@@ -837,6 +838,7 @@ function closePriceProductPicker() {
 }
 
 function closePriceProductPickerSoon() {
+  if (mobilePickerMode.value) return
   clearPriceProductPickerCloseTimer()
   priceProductPickerCloseTimer = setTimeout(() => {
     priceProductPickerOpen.value = false
