@@ -704,6 +704,13 @@ a:focus-visible,
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px; margin-bottom: 14px;
 }
+.feedback-record-actions {
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0;
+}
+.feedback-record-toggle {
+  color: var(--positive-deep);
+  background: rgba(159,232,112,0.16);
+}
 .feedback-record-list { display: grid; gap: 10px; }
 .feedback-record-item {
   display: flex; justify-content: space-between; gap: 14px; align-items: center;
@@ -1017,6 +1024,12 @@ a:focus-visible,
   }
   .feedback-form-card,
   .feedback-record-panel { padding: 16px; }
+  .feedback-record-header {
+    align-items: flex-start;
+  }
+  .feedback-record-actions {
+    flex-direction: column; align-items: stretch;
+  }
   .feedback-submit { width: 100%; justify-self: stretch; }
   .feedback-record-item { align-items: flex-start; }
 }

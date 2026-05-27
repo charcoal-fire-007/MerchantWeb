@@ -91,6 +91,7 @@ const productApplicationOptions = ref<MerchantProductApplicationOption[]>([])
 const productApplicationSearchInput = ref('')
 const productApplicationSearchQuery = ref('')
 const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
+const submissionRecordsExpanded = ref(false)
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
 const feedbackLoading = ref(false)
@@ -262,6 +263,10 @@ const submissionRecords = computed<SubmissionRecord[]>(() => {
   return [...productApplicationItems, ...feedbackItems]
     .sort((left, right) => recordTime(right.createdAt) - recordTime(left.createdAt))
 })
+const hasHiddenSubmissionRecords = computed(() => submissionRecords.value.length > 2)
+const visibleSubmissionRecords = computed(() =>
+  submissionRecordsExpanded.value ? submissionRecords.value : submissionRecords.value.slice(0, 2)
+)
 const issueFeedbackHelpText = computed(() => ({
   page: '页面展示、按钮点击、数据刷新等使用异常。',
   dispatch: '派单通知、派单记录、订单分配等流程异常。',
@@ -717,6 +722,10 @@ function selectProductApplicationOption(productId: string) {
 
 function productApplicationListMeta() {
   return '点选后提交申请'
+}
+
+function toggleSubmissionRecords() {
+  submissionRecordsExpanded.value = !submissionRecordsExpanded.value
 }
 
 function syncPriceFeedbackRuleId() {
@@ -2217,12 +2226,22 @@ async function run(task: () => Promise<void>) {
                 <h2>我的提交记录</h2>
                 <p>状态包含：已提交 / 审核中 / 待人工添加 / 已开通 / 已驳回 / 处理中 / 已处理。</p>
               </div>
-              <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshSubmissionRecords">刷新</button>
+              <div class="feedback-record-actions">
+                <button
+                  v-if="hasHiddenSubmissionRecords"
+                  type="button"
+                  class="btn btn-ghost feedback-record-toggle"
+                  @click="toggleSubmissionRecords"
+                >
+                  {{ submissionRecordsExpanded ? '收起' : `查看全部 ${submissionRecords.length} 条` }}
+                </button>
+                <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshSubmissionRecords">刷新</button>
+              </div>
             </div>
             <div v-if="feedbackLoading" class="notif-empty">提交记录加载中...</div>
             <div v-else-if="submissionRecords.length === 0" class="notif-empty">暂无提交记录。</div>
             <div v-else class="feedback-record-list">
-              <div v-for="record in submissionRecords" :key="record.id" class="feedback-record-item">
+              <div v-for="record in visibleSubmissionRecords" :key="record.id" class="feedback-record-item">
                 <div>
                   <strong>{{ record.typeText }} · {{ record.title }}</strong>
                   <span>{{ record.summary }}</span>
