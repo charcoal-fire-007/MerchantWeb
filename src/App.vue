@@ -113,7 +113,6 @@ const newProductApplicationForm = reactive({
 const issueFeedbackForm = reactive({
   issueType: 'page' as MerchantIssueType,
   description: '',
-  contact: '',
 })
 const priceFeedbackForm = reactive({
   product: '',
@@ -121,7 +120,6 @@ const priceFeedbackForm = reactive({
   priceIssueType: 'price_unreasonable' as MerchantPriceIssueType,
   pricePerDay: '',
   reason: '',
-  contact: '',
 })
 const issueFeedbackOptions: Array<{ value: MerchantIssueType; label: string }> = [
   { value: 'page', label: '页面异常' },
@@ -672,7 +670,6 @@ function goToPriceFeedback(product: MerchantProduct) {
   priceFeedbackForm.priceIssueType = 'price_unreasonable'
   priceFeedbackForm.pricePerDay = ''
   priceFeedbackForm.reason = ''
-  priceFeedbackForm.contact = priceFeedbackForm.contact || accountLabel.value
   feedbackNotice.value = ''
   feedbackError.value = ''
   navActive.value = 'feedback'
@@ -922,7 +919,7 @@ async function submitIssueFeedback() {
       type: 'issue',
       issue_type: issueFeedbackForm.issueType,
       description,
-      contact: issueFeedbackForm.contact.trim() || accountLabel.value,
+      contact: accountLabel.value,
     })
     prependFeedbackRecord(record)
     issueFeedbackForm.description = ''
@@ -962,7 +959,7 @@ async function submitPriceFeedback() {
       price_issue_type: priceFeedbackForm.priceIssueType,
       price_per_day: priceFeedbackRequiresPrice.value ? pricePerDay : null,
       reason: reason || null,
-      contact: priceFeedbackForm.contact.trim() || accountLabel.value,
+      contact: accountLabel.value,
     })
     prependFeedbackRecord(record)
     priceFeedbackForm.pricePerDay = ''
@@ -2150,10 +2147,6 @@ async function run(task: () => Promise<void>) {
                 <label>问题描述</label>
                 <textarea v-model="issueFeedbackForm.description" :placeholder="issueFeedbackPlaceholder" />
               </div>
-              <div class="field">
-                <label>联系方式（选填）</label>
-                <input v-model="issueFeedbackForm.contact" :placeholder="accountLabel" />
-              </div>
               <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitIssueFeedback">
                 {{ feedbackSubmitting ? '提交中...' : issueFeedbackSubmitText }}
               </button>
@@ -2199,10 +2192,6 @@ async function run(task: () => Promise<void>) {
               <div class="field">
                 <label>{{ priceFeedbackReasonLabel }}</label>
                 <textarea v-model="priceFeedbackForm.reason" :placeholder="priceFeedbackReasonPlaceholder" />
-              </div>
-              <div class="field">
-                <label>联系方式（选填）</label>
-                <input v-model="priceFeedbackForm.contact" :placeholder="accountLabel" />
               </div>
               <button class="btn btn-primary feedback-submit" :disabled="feedbackSubmitting" @click="submitPriceFeedback">
                 {{ feedbackSubmitting ? '提交中...' : priceFeedbackSubmitText }}
