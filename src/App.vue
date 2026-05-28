@@ -2343,7 +2343,6 @@ async function run(task: () => Promise<void>) {
             </div>
 
             <template v-if="feedbackMode === 'issue'">
-              <p class="feedback-field-hint">用于反馈页面异常、派单异常、接单状态异常、登录账号问题。</p>
               <div class="field">
                 <label>问题类型</label>
                 <div class="feedback-choice-group" role="radiogroup" aria-label="问题类型">
@@ -2371,7 +2370,6 @@ async function run(task: () => Promise<void>) {
             </template>
 
             <template v-if="feedbackMode === 'price_suggestion'">
-              <p class="feedback-field-hint">用于反馈推荐价格不合理、商品型号不准或其他价格推荐问题。</p>
               <div class="field">
                 <label>商品</label>
                 <div class="feedback-product-picker" :class="{ open: priceProductPickerOpen }">
