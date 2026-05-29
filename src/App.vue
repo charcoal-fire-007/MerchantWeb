@@ -787,10 +787,12 @@ function clearProductApplicationSearch() {
   openProductApplicationPicker()
 }
 
-function openProductApplicationPicker() {
+function openProductApplicationPicker(options: { blurActiveInput?: boolean } = {}) {
   clearProductApplicationPickerCloseTimer()
   productApplicationPickerOpen.value = true
-  void nextTick(blurActivePickerInputOnMobile)
+  if (options.blurActiveInput !== false) {
+    void nextTick(blurActivePickerInputOnMobile)
+  }
 }
 
 function closeProductApplicationPicker() {
@@ -817,7 +819,7 @@ function toggleProductApplicationPicker() {
 
 function handleProductApplicationSearchInput() {
   productApplicationSearchQuery.value = productApplicationSearchInput.value.trim()
-  openProductApplicationPicker()
+  openProductApplicationPicker({ blurActiveInput: false })
 }
 
 function selectProductApplicationOption(productId: string) {
@@ -2193,7 +2195,7 @@ async function run(task: () => Promise<void>) {
                       aria-controls="product-application-listbox"
                       :aria-expanded="productApplicationPickerOpen"
                       :readonly="mobilePickerMode"
-                      @focus="openProductApplicationPicker"
+                      @focus="openProductApplicationPicker()"
                       @blur="closeProductApplicationPickerSoon"
                       @input="handleProductApplicationSearchInput"
                       @keyup.enter="applyProductApplicationSearch"
@@ -2296,7 +2298,7 @@ async function run(task: () => Promise<void>) {
                     <small>{{ productApplicationIsNew ? '已选择新增商品' : '已选择商品' }}</small>
                     <strong>{{ productApplicationSelectedName }}</strong>
                   </span>
-                  <button type="button" @click="openProductApplicationPicker">更换</button>
+                  <button type="button" @click="openProductApplicationPicker()">更换</button>
                 </div>
               </div>
             </div>
