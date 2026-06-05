@@ -380,14 +380,18 @@ test('product management collapses only enabled products so paused products stay
 
 test('product management supports confirmed bulk pause and resume with progress feedback', () => {
   assert.match(appSource, /type BulkAvailabilityMode = 'pause' \| 'resume'/)
+  assert.match(appSource, /type PauseResumeMode = 'scheduled' \| 'manual'/)
   assert.match(appSource, /const bulkAvailabilityDialog = reactive/)
+  assert.match(appSource, /resumeMode: 'scheduled' as PauseResumeMode/)
   assert.match(appSource, /resumeAt: ''/)
   assert.match(appSource, /function openBulkAvailabilityDialog\(mode: BulkAvailabilityMode\)/)
   assert.match(appSource, /function selectedBulkProducts\(mode: BulkAvailabilityMode\)/)
   assert.match(appSource, /mode === 'pause' \? enabledProducts\.value : disabledProducts\.value/)
   assert.match(appSource, /async function confirmBulkAvailability\(\)/)
-  assert.match(appSource, /api\.bulkUpdateAvailability\(ruleIds, available, \{ resumeAt \}\)/)
+  assert.match(appSource, /api\.bulkUpdateAvailability\(ruleIds, available, \{ resumeAt: pauseResumeAt \}\)/)
   assert.match(appSource, /datetimeLocalToIso\(bulkAvailabilityDialog\.resumeAt\)/)
+  assert.match(appSource, /bulkAvailabilityDialog\.resumeMode === 'scheduled'/)
+  assert.match(appSource, /手动恢复/)
   assert.match(appSource, /已成功 \$\{result\.success_count\} 件，失败 \$\{result\.failed_count\} 件，请稍后重试/)
   assert.match(appSource, /一键暂停全部/)
   assert.match(appSource, /一键恢复全部/)
@@ -406,7 +410,8 @@ test('enabled product status badge says actively receiving orders', () => {
 
 test('product cards label status update time and scheduled resume time clearly', () => {
   assert.match(appSource, /状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
-  assert.match(appSource, /恢复接单时间：\s*\{\{\s*formatResumeAt\(p\.resume_at\)\s*\}\}\s*·\s*状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
+  assert.match(appSource, /\{\{\s*pausedResumeLabel\(p\.resume_at\)\s*\}\}\s*·\s*状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
+  assert.match(appSource, /return '恢复方式：手动恢复'/)
 })
 
 test('product card in-view animation class is controlled by vue state', () => {
@@ -439,13 +444,19 @@ test('product cards play a safe scroll-return animation without hiding again', (
 
 test('pause scheduled resume time panel uses a 0.58s elastic pop-in animation', () => {
   assert.match(appSource, /class="pause-form"/)
-  assert.match(appSource, /const pauseForm = reactive\(\{ resumeAt: '' \}\)/)
+  assert.match(appSource, /const pauseForm = reactive\(\{ resumeAt: '', resumeMode: 'scheduled' as PauseResumeMode \}\)/)
+  assert.match(appSource, /class="pause-resume-mode"/)
+  assert.match(appSource, /定时自动恢复/)
+  assert.match(appSource, /手动恢复/)
   assert.match(appSource, /type="datetime-local"/)
+  assert.match(appSource, /v-if="pauseForm\.resumeMode === 'scheduled'"/)
   assert.match(appSource, /v-model="pauseForm\.resumeAt"/)
-  assert.match(appSource, /api\.updateAvailability\(ruleId, false, \{ resumeAt \}\)/)
+  assert.match(appSource, /api\.updateAvailability\(ruleId, false, \{ resumeAt: pauseResumeAt \}\)/)
+  assert.match(appSource, /pauseForm\.resumeMode === 'scheduled'/)
   assert.match(appSource, /恢复接单时间/)
   assert.doesNotMatch(appSource, /暂停原因/)
   assert.match(cssSource, /\.pause-form\s*\{[\s\S]*animation:\s*pauseFormPop\s+0\.58s/)
+  assert.match(cssSource, /\.pause-resume-mode/)
   assert.match(cssSource, /\.pause-form input\.pause-time-input/)
   assert.match(cssSource, /\.pause-form-hint/)
   assert.match(cssSource, /@keyframes\s+pauseFormPop/)
