@@ -381,12 +381,13 @@ test('product management collapses only enabled products so paused products stay
 test('product management supports confirmed bulk pause and resume with progress feedback', () => {
   assert.match(appSource, /type BulkAvailabilityMode = 'pause' \| 'resume'/)
   assert.match(appSource, /const bulkAvailabilityDialog = reactive/)
-  assert.match(appSource, /reason: '库存盘点'/)
+  assert.match(appSource, /resumeAt: ''/)
   assert.match(appSource, /function openBulkAvailabilityDialog\(mode: BulkAvailabilityMode\)/)
   assert.match(appSource, /function selectedBulkProducts\(mode: BulkAvailabilityMode\)/)
   assert.match(appSource, /mode === 'pause' \? enabledProducts\.value : disabledProducts\.value/)
   assert.match(appSource, /async function confirmBulkAvailability\(\)/)
-  assert.match(appSource, /api\.bulkUpdateAvailability\(/)
+  assert.match(appSource, /api\.bulkUpdateAvailability\(ruleIds, available, \{ resumeAt \}\)/)
+  assert.match(appSource, /datetimeLocalToIso\(bulkAvailabilityDialog\.resumeAt\)/)
   assert.match(appSource, /已成功 \$\{result\.success_count\} 件，失败 \$\{result\.failed_count\} 件，请稍后重试/)
   assert.match(appSource, /一键暂停全部/)
   assert.match(appSource, /一键恢复全部/)
@@ -403,9 +404,9 @@ test('enabled product status badge says actively receiving orders', () => {
   assert.doesNotMatch(appSource, /<span class="status-badge active">可接单<\/span>/)
 })
 
-test('product cards label status update time and pause reason clearly', () => {
+test('product cards label status update time and scheduled resume time clearly', () => {
   assert.match(appSource, /状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
-  assert.match(appSource, /暂停原因：\s*\{\{\s*p\.reason \|\| '无库存'\s*\}\}\s*·\s*状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
+  assert.match(appSource, /恢复接单时间：\s*\{\{\s*formatResumeAt\(p\.resume_at\)\s*\}\}\s*·\s*状态更新：\s*\{\{\s*relativeTime\(p\.updated_at\)\s*\}\}/)
 })
 
 test('product card in-view animation class is controlled by vue state', () => {
@@ -436,9 +437,17 @@ test('product cards play a safe scroll-return animation without hiding again', (
   assert.doesNotMatch(returnAnimation, /opacity:\s*0/)
 })
 
-test('pause reason panel uses a 0.58s elastic pop-in animation', () => {
+test('pause scheduled resume time panel uses a 0.58s elastic pop-in animation', () => {
   assert.match(appSource, /class="pause-form"/)
+  assert.match(appSource, /const pauseForm = reactive\(\{ resumeAt: '' \}\)/)
+  assert.match(appSource, /type="datetime-local"/)
+  assert.match(appSource, /v-model="pauseForm\.resumeAt"/)
+  assert.match(appSource, /api\.updateAvailability\(ruleId, false, \{ resumeAt \}\)/)
+  assert.match(appSource, /恢复接单时间/)
+  assert.doesNotMatch(appSource, /暂停原因/)
   assert.match(cssSource, /\.pause-form\s*\{[\s\S]*animation:\s*pauseFormPop\s+0\.58s/)
+  assert.match(cssSource, /\.pause-form input\.pause-time-input/)
+  assert.match(cssSource, /\.pause-form-hint/)
   assert.match(cssSource, /@keyframes\s+pauseFormPop/)
   assert.match(cssSource, /transform-origin:\s*top center/)
   const pauseAnimation = cssSource.match(/@keyframes\s+pauseFormPop\s*\{[\s\S]*?\n\}/)?.[0] || ''

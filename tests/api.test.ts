@@ -162,11 +162,87 @@ test('ApiClient sends merchant bulk availability update once with selected rule 
   assert.deepEqual(JSON.parse(requestedBody), {
     rule_ids: ['rule-1', 'rule-2', 'rule-3'],
     available: false,
+    resume_at: null,
     reason: '库存盘点',
   })
   assert.equal(result.success_count, 2)
   assert.equal(result.failed_count, 1)
   assert.deepEqual(result.failed_rule_ids, ['rule-3'])
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient sends scheduled resume time for bulk product pause', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  let requestedBody = ''
+
+  globalThis.fetch = async (input, init) => {
+    requestedPath = String(input)
+    requestedBody = String(init?.body || '')
+    return new Response(JSON.stringify({
+      success_count: 3,
+      failed_count: 0,
+      items: [],
+      failed_rule_ids: [],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.bulkUpdateAvailability(
+    ['rule-1', 'rule-2', 'rule-3'],
+    false,
+    { resumeAt: '2026-06-07T09:00:00.000Z' }
+  )
+
+  assert.equal(requestedPath, '/api/merchant/products/availability/bulk')
+  assert.deepEqual(JSON.parse(requestedBody), {
+    rule_ids: ['rule-1', 'rule-2', 'rule-3'],
+    available: false,
+    reason: null,
+    resume_at: '2026-06-07T09:00:00.000Z',
+  })
+  assert.equal(result.success_count, 3)
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient sends scheduled resume time for single product pause', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  let requestedBody = ''
+
+  globalThis.fetch = async (input, init) => {
+    requestedPath = String(input)
+    requestedBody = String(init?.body || '')
+    return new Response(JSON.stringify({
+      rule_id: 'rule-g9',
+      product: 'Canon G9',
+      keywords: [],
+      weight: 1,
+      available: false,
+      reason: null,
+      resume_at: '2026-06-07T09:00:00.000Z',
+      updated_at: '2026-06-05T03:30:00.000Z',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.updateAvailability('rule-g9', false, {
+    resumeAt: '2026-06-07T09:00:00.000Z'
+  })
+
+  assert.equal(requestedPath, '/api/merchant/products/rule-g9/availability')
+  assert.deepEqual(JSON.parse(requestedBody), {
+    available: false,
+    reason: null,
+    resume_at: '2026-06-07T09:00:00.000Z',
+  })
+  assert.equal(result.resume_at, '2026-06-07T09:00:00.000Z')
   globalThis.fetch = originalFetch
 })
 
