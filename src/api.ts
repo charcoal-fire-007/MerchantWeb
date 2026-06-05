@@ -22,6 +22,7 @@ export interface MerchantProduct {
   weight: number
   available: boolean
   reason: string | null
+  resume_at?: string | null
   updated_at: string
 }
 
@@ -30,6 +31,11 @@ export interface MerchantBulkAvailabilityResponse {
   failed_count: number
   items: MerchantProduct[]
   failed_rule_ids: string[]
+}
+
+export interface MerchantAvailabilityPayload {
+  reason?: string | null
+  resumeAt?: string | null
 }
 
 export interface MerchantNotification {
@@ -215,6 +221,13 @@ function mapApiErrorMessage(status: number, detail: string | undefined, context:
   return `请求失败 (${status})`
 }
 
+function normalizeAvailabilityPayload(payload: MerchantAvailabilityPayload | string | null | undefined): MerchantAvailabilityPayload {
+  if (typeof payload === 'string') {
+    return { reason: payload }
+  }
+  return payload || {}
+}
+
 async function readResponseBody(response: Response) {
   if (response.status === 204) {
     return null
@@ -328,21 +341,36 @@ export class ApiClient {
     return this.request<CurrentMerchantResponse>('/api/auth/me')
   }
 
-  async updateAvailability(ruleId: string, available: boolean, reason?: string): Promise<MerchantProduct> {
+  async updateAvailability(
+    ruleId: string,
+    available: boolean,
+    payload: MerchantAvailabilityPayload | string = {}
+  ): Promise<MerchantProduct> {
+    const availabilityPayload = normalizeAvailabilityPayload(payload)
     return this.request<MerchantProduct>(`/api/merchant/products/${encodeURIComponent(ruleId)}/availability`, {
       method: 'POST',
-      body: JSON.stringify({ available, reason: reason || null })
+      body: JSON.stringify({
+        available,
+        reason: availabilityPayload.reason || null,
+        resume_at: availabilityPayload.resumeAt || null,
+      })
     })
   }
 
   async bulkUpdateAvailability(
     ruleIds: string[],
     available: boolean,
-    reason?: string
+    payload: MerchantAvailabilityPayload | string = {}
   ): Promise<MerchantBulkAvailabilityResponse> {
+    const availabilityPayload = normalizeAvailabilityPayload(payload)
     return this.request<MerchantBulkAvailabilityResponse>('/api/merchant/products/availability/bulk', {
       method: 'POST',
-      body: JSON.stringify({ rule_ids: ruleIds, available, reason: reason || null })
+      body: JSON.stringify({
+        rule_ids: ruleIds,
+        available,
+        reason: availabilityPayload.reason || null,
+        resume_at: availabilityPayload.resumeAt || null,
+      })
     })
   }
 
