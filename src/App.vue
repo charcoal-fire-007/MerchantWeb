@@ -135,12 +135,12 @@ const priceIssueFeedbackOptions: Array<{ value: MerchantPriceIssueType; label: s
   { value: 'other', label: '其他' },
 ]
 const expandingProduct = ref<string | null>(null)
-const pauseForm = reactive({ reason: '' })
+const pauseForm = reactive({ resumeAt: '' })
 const submittingProduct = ref<string | null>(null)
 const bulkAvailabilityDialog = reactive({
   open: false,
   mode: 'pause' as BulkAvailabilityMode,
-  reason: '库存盘点',
+  resumeAt: '',
 })
 const bulkAvailabilityProgress = reactive({ processing: false, current: 0, total: 0 })
 const navActive = ref('dashboard')
@@ -1380,9 +1380,12 @@ function hideDispatchChartTooltip() {
 function toggleExpand(ruleId: string) {
   if (expandingProduct.value === ruleId) { expandingProduct.value = null }
   else {
-    expandingProduct.value = ruleId; pauseForm.reason = ''
+    expandingProduct.value = ruleId
     const p = products.value.find((pp) => pp.rule_id === ruleId)
-    if (p?.reason) pauseForm.reason = p.reason
+    const resumeDate = p?.resume_at ? new Date(p.resume_at) : null
+    pauseForm.resumeAt = resumeDate && !Number.isNaN(resumeDate.getTime())
+      ? toDatetimeLocalValue(resumeDate)
+      : nextResumeTimeInput()
   }
 }
 
@@ -1411,7 +1414,7 @@ function openBulkAvailabilityDialog(mode: BulkAvailabilityMode) {
   }
   bulkAvailabilityDialog.open = true
   bulkAvailabilityDialog.mode = mode
-  bulkAvailabilityDialog.reason = mode === 'pause' ? '库存盘点' : ''
+  bulkAvailabilityDialog.resumeAt = mode === 'pause' ? nextResumeTimeInput() : ''
   bulkAvailabilityProgress.current = 0
   bulkAvailabilityProgress.total = selectedProducts.length
 }
@@ -1460,11 +1463,16 @@ async function confirmBulkAvailability() {
   }
 
   error.value = ''
+  const available = mode === 'resume'
+  const resumeAt = mode === 'pause' ? datetimeLocalToIso(bulkAvailabilityDialog.resumeAt) : undefined
+  if (mode === 'pause' && (!resumeAt || !isFutureDatetimeLocal(bulkAvailabilityDialog.resumeAt))) {
+    error.value = '请选择未来的恢复接单时间'
+    return
+  }
+
   startBulkAvailabilityProgress(ruleIds.length)
   try {
-    const available = mode === 'resume'
-    const reason = mode === 'pause' ? bulkAvailabilityDialog.reason.trim() || '库存盘点' : undefined
-    const result = await api.bulkUpdateAvailability(ruleIds, available, reason)
+    const result = await api.bulkUpdateAvailability(ruleIds, available, { resumeAt })
     replaceProducts(result.items)
     bulkAvailabilityProgress.current = result.success_count + result.failed_count
     if (result.failed_count > 0) {
@@ -1492,9 +1500,16 @@ async function setAvailable(ruleId: string) {
 }
 
 async function setUnavailable(ruleId: string) {
+  const resumeAt = datetimeLocalToIso(pauseForm.resumeAt)
+  if (!resumeAt || !isFutureDatetimeLocal(pauseForm.resumeAt)) {
+    error.value = '请选择未来的恢复接单时间'
+    return
+  }
+
+  error.value = ''
   submittingProduct.value = ruleId
   try {
-    const updated = await api.updateAvailability(ruleId, false, pauseForm.reason || undefined)
+    const updated = await api.updateAvailability(ruleId, false, { resumeAt })
     const idx = products.value.findIndex((p) => p.rule_id === ruleId)
     if (idx !== -1) products.value[idx] = updated
     expandingProduct.value = null
@@ -1517,7 +1532,7 @@ function logout(reason: LogoutReason = 'manual') {
   passwordVisibility.confirmPassword = false
   bulkAvailabilityDialog.open = false
   bulkAvailabilityDialog.mode = 'pause'
-  bulkAvailabilityDialog.reason = '库存盘点'
+  bulkAvailabilityDialog.resumeAt = ''
   bulkAvailabilityProgress.processing = false
   bulkAvailabilityProgress.current = 0
   bulkAvailabilityProgress.total = 0
@@ -1534,7 +1549,7 @@ function logout(reason: LogoutReason = 'manual') {
   notificationsLoaded.value = false
   newDispatchBurstCount.value = 0
   stopNotificationsPolling()
-  expandingProduct.value = null; pauseForm.reason = ''
+  expandingProduct.value = null; pauseForm.resumeAt = ''
   navActive.value = 'dashboard'
   error.value = ''
   sessionNotice.value = notice
@@ -1603,6 +1618,42 @@ function saveMerchantSession(session: MerchantSession | null) {
     return
   }
   localStorage.setItem('merchant_profile', JSON.stringify(session))
+}
+
+function toDatetimeLocalValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function nextResumeTimeInput() {
+  const next = new Date(Date.now() + 60 * 60 * 1000)
+  next.setMinutes(0, 0, 0)
+  return toDatetimeLocalValue(next)
+}
+
+function datetimeLocalToIso(value: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString()
+}
+
+function isFutureDatetimeLocal(value: string) {
+  const date = new Date(value)
+  return !Number.isNaN(date.getTime()) && date.getTime() > Date.now()
+}
+
+function formatResumeAt(value?: string | null) {
+  if (!value) return '未设置'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未设置'
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 function formatTime(value: string) {
@@ -2073,8 +2124,14 @@ async function run(task: () => Promise<void>) {
                       </button>
                     </div>
                     <div v-if="expandingProduct === p.rule_id" class="pause-form">
-                      <label>暂停原因（选填）</label>
-                      <textarea v-model="pauseForm.reason" placeholder="例如：无库存、设备维修" />
+                      <label>恢复接单时间</label>
+                      <input
+                        v-model="pauseForm.resumeAt"
+                        class="pause-time-input"
+                        type="datetime-local"
+                        :min="toDatetimeLocalValue(new Date())"
+                      />
+                      <p class="pause-form-hint">到达该时间后，系统会自动恢复此商品接单。</p>
                       <div class="pause-form-actions">
                         <button class="btn btn-ghost pause-price-feedback-btn" @click="goToPriceFeedback(p)">价格反馈</button>
                         <span class="pause-form-action-spacer"></span>
@@ -2102,7 +2159,7 @@ async function run(task: () => Promise<void>) {
                 >
                   <div class="product-card-main">
                     <div class="product-card-name">{{ p.product }}</div>
-                    <div class="product-card-meta">暂停原因：{{ p.reason || '无库存' }} · 状态更新：{{ relativeTime(p.updated_at) }}</div>
+                    <div class="product-card-meta">恢复接单时间：{{ formatResumeAt(p.resume_at) }} · 状态更新：{{ relativeTime(p.updated_at) }}</div>
                   </div>
                   <span class="status-badge paused">已暂停</span>
                   <button class="btn btn-primary" :disabled="submittingProduct === p.rule_id" @click="setAvailable(p.rule_id)">恢复接单</button>
@@ -2123,15 +2180,16 @@ async function run(task: () => Promise<void>) {
             <p>
               {{
                 bulkAvailabilityDialog.mode === 'pause'
-                  ? `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，暂停后不会被派单。`
+                  ? `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，系统会在设置时间后自动恢复接单。`
                   : `将恢复当前已暂停的 ${bulkAvailabilityProgress.total} 件商品，恢复后可以继续被派单。`
               }}
             </p>
             <div v-if="bulkAvailabilityDialog.mode === 'pause'" class="field">
-              <label>暂停原因</label>
+              <label>恢复接单时间</label>
               <input
-                v-model="bulkAvailabilityDialog.reason"
-                placeholder="例如：库存盘点"
+                v-model="bulkAvailabilityDialog.resumeAt"
+                type="datetime-local"
+                :min="toDatetimeLocalValue(new Date())"
                 :disabled="bulkAvailabilityProgress.processing"
               />
             </div>
