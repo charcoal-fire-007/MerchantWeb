@@ -24,6 +24,7 @@ import SplitRevealText from './components/SplitRevealText.vue'
 import { getRecentUnreadNotifications } from './notifications'
 
 type BulkAvailabilityMode = 'pause' | 'resume'
+type PauseResumeMode = 'scheduled' | 'manual'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
 type FeedbackCenterMode = 'product_application' | 'feedback'
 
@@ -135,11 +136,12 @@ const priceIssueFeedbackOptions: Array<{ value: MerchantPriceIssueType; label: s
   { value: 'other', label: '其他' },
 ]
 const expandingProduct = ref<string | null>(null)
-const pauseForm = reactive({ resumeAt: '' })
+const pauseForm = reactive({ resumeAt: '', resumeMode: 'scheduled' as PauseResumeMode })
 const submittingProduct = ref<string | null>(null)
 const bulkAvailabilityDialog = reactive({
   open: false,
   mode: 'pause' as BulkAvailabilityMode,
+  resumeMode: 'scheduled' as PauseResumeMode,
   resumeAt: '',
 })
 const bulkAvailabilityProgress = reactive({ processing: false, current: 0, total: 0 })
@@ -177,6 +179,15 @@ const disabledProducts = computed(() => products.value.filter((p) => !p.availabl
 const todayAssigned = computed(() => notificationsSummary.today_count)
 const onlineCount = computed(() => enabledProducts.value.length)
 const pendingCount = computed(() => disabledProducts.value.length)
+const bulkAvailabilityDialogDescription = computed(() => {
+  if (bulkAvailabilityDialog.mode === 'resume') {
+    return `将恢复当前已暂停的 ${bulkAvailabilityProgress.total} 件商品，恢复后可以继续被派单。`
+  }
+  if (bulkAvailabilityDialog.resumeMode === 'manual') {
+    return `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，商户需要在已暂停区域手动恢复接单。`
+  }
+  return `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，系统会在设置时间后自动恢复接单。`
+})
 const dashboardNotifications = computed(() => getRecentUnreadNotifications(
   notifications.value,
   { localReadIds: localReadNotificationIds.value },
@@ -199,6 +210,7 @@ const enabledProductsCollapseTouched = ref(false)
 const hasProductSearch = computed(() => productSearch.value.trim().length > 0)
 const isEnabledProductsCollapsed = computed(() => !hasProductSearch.value && enabledProductsCollapsed.value)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
+let productsTimer: ReturnType<typeof setInterval> | null = null
 const dispatchProductColors = [
   '#9fe870',
   '#67e8f9',
@@ -356,6 +368,7 @@ if (isLoggedIn.value) {
   void refreshProducts()
   void refreshNotifications()
   startNotificationsPolling()
+  startProductsPolling()
 }
 onMounted(() => {
   observeProductCards()
@@ -363,6 +376,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   stopNotificationsPolling()
+  stopProductsPolling()
   disconnectProductCardsObserver()
   cleanupMobilePickerMode()
   clearProductCardReturnTimers()
@@ -660,6 +674,7 @@ async function enterMerchantDashboard(result: LoginResponse) {
   await refreshProducts()
   await refreshNotifications()
   startNotificationsPolling()
+  startProductsPolling()
 }
 
 async function refreshMerchantSession() {
@@ -675,7 +690,7 @@ async function refreshMerchantSession() {
 }
 
 async function refreshProducts() {
-  await run(async () => {
+  const loadProducts = async () => {
     products.value = await api.listProducts()
 
     const session = merchantSession.value
@@ -685,7 +700,21 @@ async function refreshProducts() {
         merchantName: merchantNameFromProducts.value,
       })
     }
-  })
+  }
+
+  if (products.value.length === 0) {
+    await run(loadProducts)
+    return
+  }
+
+  try {
+    await loadProducts()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return
+    }
+    error.value = err instanceof Error ? err.message : '商品状态刷新失败'
+  }
 }
 
 async function refreshNotifications() {
@@ -722,10 +751,22 @@ function startNotificationsPolling() {
   notificationsTimer = setInterval(refreshNotifications, 30000)
 }
 
+function startProductsPolling() {
+  stopProductsPolling()
+  productsTimer = setInterval(refreshProducts, 30000)
+}
+
 function stopNotificationsPolling() {
   if (notificationsTimer) {
     clearInterval(notificationsTimer)
     notificationsTimer = null
+  }
+}
+
+function stopProductsPolling() {
+  if (productsTimer) {
+    clearInterval(productsTimer)
+    productsTimer = null
   }
 }
 
@@ -1383,9 +1424,13 @@ function toggleExpand(ruleId: string) {
     expandingProduct.value = ruleId
     const p = products.value.find((pp) => pp.rule_id === ruleId)
     const resumeDate = p?.resume_at ? new Date(p.resume_at) : null
-    pauseForm.resumeAt = resumeDate && !Number.isNaN(resumeDate.getTime())
-      ? toDatetimeLocalValue(resumeDate)
-      : nextResumeTimeInput()
+    if (resumeDate && !Number.isNaN(resumeDate.getTime())) {
+      pauseForm.resumeMode = 'scheduled'
+      pauseForm.resumeAt = toDatetimeLocalValue(resumeDate)
+    } else {
+      pauseForm.resumeMode = p?.available === false ? 'manual' : 'scheduled'
+      pauseForm.resumeAt = nextResumeTimeInput()
+    }
   }
 }
 
@@ -1414,6 +1459,7 @@ function openBulkAvailabilityDialog(mode: BulkAvailabilityMode) {
   }
   bulkAvailabilityDialog.open = true
   bulkAvailabilityDialog.mode = mode
+  bulkAvailabilityDialog.resumeMode = 'scheduled'
   bulkAvailabilityDialog.resumeAt = mode === 'pause' ? nextResumeTimeInput() : ''
   bulkAvailabilityProgress.current = 0
   bulkAvailabilityProgress.total = selectedProducts.length
@@ -1464,15 +1510,21 @@ async function confirmBulkAvailability() {
 
   error.value = ''
   const available = mode === 'resume'
-  const resumeAt = mode === 'pause' ? datetimeLocalToIso(bulkAvailabilityDialog.resumeAt) : undefined
-  if (mode === 'pause' && (!resumeAt || !isFutureDatetimeLocal(bulkAvailabilityDialog.resumeAt))) {
+  const pauseResumeAt = mode === 'pause' && bulkAvailabilityDialog.resumeMode === 'scheduled'
+    ? datetimeLocalToIso(bulkAvailabilityDialog.resumeAt)
+    : null
+  if (
+    mode === 'pause' &&
+    bulkAvailabilityDialog.resumeMode === 'scheduled' &&
+    (!pauseResumeAt || !isFutureDatetimeLocal(bulkAvailabilityDialog.resumeAt))
+  ) {
     error.value = '请选择未来的恢复接单时间'
     return
   }
 
   startBulkAvailabilityProgress(ruleIds.length)
   try {
-    const result = await api.bulkUpdateAvailability(ruleIds, available, { resumeAt })
+    const result = await api.bulkUpdateAvailability(ruleIds, available, { resumeAt: pauseResumeAt })
     replaceProducts(result.items)
     bulkAvailabilityProgress.current = result.success_count + result.failed_count
     if (result.failed_count > 0) {
@@ -1500,8 +1552,8 @@ async function setAvailable(ruleId: string) {
 }
 
 async function setUnavailable(ruleId: string) {
-  const resumeAt = datetimeLocalToIso(pauseForm.resumeAt)
-  if (!resumeAt || !isFutureDatetimeLocal(pauseForm.resumeAt)) {
+  const pauseResumeAt = pauseForm.resumeMode === 'scheduled' ? datetimeLocalToIso(pauseForm.resumeAt) : null
+  if (pauseForm.resumeMode === 'scheduled' && (!pauseResumeAt || !isFutureDatetimeLocal(pauseForm.resumeAt))) {
     error.value = '请选择未来的恢复接单时间'
     return
   }
@@ -1509,7 +1561,7 @@ async function setUnavailable(ruleId: string) {
   error.value = ''
   submittingProduct.value = ruleId
   try {
-    const updated = await api.updateAvailability(ruleId, false, { resumeAt })
+    const updated = await api.updateAvailability(ruleId, false, { resumeAt: pauseResumeAt })
     const idx = products.value.findIndex((p) => p.rule_id === ruleId)
     if (idx !== -1) products.value[idx] = updated
     expandingProduct.value = null
@@ -1532,6 +1584,7 @@ function logout(reason: LogoutReason = 'manual') {
   passwordVisibility.confirmPassword = false
   bulkAvailabilityDialog.open = false
   bulkAvailabilityDialog.mode = 'pause'
+  bulkAvailabilityDialog.resumeMode = 'scheduled'
   bulkAvailabilityDialog.resumeAt = ''
   bulkAvailabilityProgress.processing = false
   bulkAvailabilityProgress.current = 0
@@ -1549,7 +1602,8 @@ function logout(reason: LogoutReason = 'manual') {
   notificationsLoaded.value = false
   newDispatchBurstCount.value = 0
   stopNotificationsPolling()
-  expandingProduct.value = null; pauseForm.resumeAt = ''
+  stopProductsPolling()
+  expandingProduct.value = null; pauseForm.resumeAt = ''; pauseForm.resumeMode = 'scheduled'
   navActive.value = 'dashboard'
   error.value = ''
   sessionNotice.value = notice
@@ -1654,6 +1708,11 @@ function formatResumeAt(value?: string | null) {
     minute: '2-digit',
     hour12: false,
   })
+}
+
+function pausedResumeLabel(value?: string | null) {
+  if (!value) return '恢复方式：手动恢复'
+  return `恢复接单时间：${formatResumeAt(value)}`
 }
 
 function formatTime(value: string) {
@@ -2124,14 +2183,36 @@ async function run(task: () => Promise<void>) {
                       </button>
                     </div>
                     <div v-if="expandingProduct === p.rule_id" class="pause-form">
-                      <label>恢复接单时间</label>
-                      <input
-                        v-model="pauseForm.resumeAt"
-                        class="pause-time-input"
-                        type="datetime-local"
-                        :min="toDatetimeLocalValue(new Date())"
-                      />
-                      <p class="pause-form-hint">到达该时间后，系统会自动恢复此商品接单。</p>
+                      <label>恢复方式</label>
+                      <div class="pause-resume-mode" role="radiogroup" aria-label="恢复方式">
+                        <button
+                          type="button"
+                          class="pause-resume-mode-btn"
+                          :class="{ active: pauseForm.resumeMode === 'scheduled' }"
+                          @click="pauseForm.resumeMode = 'scheduled'"
+                        >
+                          定时自动恢复
+                        </button>
+                        <button
+                          type="button"
+                          class="pause-resume-mode-btn"
+                          :class="{ active: pauseForm.resumeMode === 'manual' }"
+                          @click="pauseForm.resumeMode = 'manual'"
+                        >
+                          手动恢复
+                        </button>
+                      </div>
+                      <template v-if="pauseForm.resumeMode === 'scheduled'">
+                        <label>恢复接单时间</label>
+                        <input
+                          v-model="pauseForm.resumeAt"
+                          class="pause-time-input"
+                          type="datetime-local"
+                          :min="toDatetimeLocalValue(new Date())"
+                        />
+                        <p class="pause-form-hint">到达该时间后，系统会自动恢复此商品接单。</p>
+                      </template>
+                      <p v-else class="pause-form-hint">暂停后不会自动恢复，商户需要在已暂停区域手动点击恢复接单。</p>
                       <div class="pause-form-actions">
                         <button class="btn btn-ghost pause-price-feedback-btn" @click="goToPriceFeedback(p)">价格反馈</button>
                         <span class="pause-form-action-spacer"></span>
@@ -2159,7 +2240,7 @@ async function run(task: () => Promise<void>) {
                 >
                   <div class="product-card-main">
                     <div class="product-card-name">{{ p.product }}</div>
-                    <div class="product-card-meta">恢复接单时间：{{ formatResumeAt(p.resume_at) }} · 状态更新：{{ relativeTime(p.updated_at) }}</div>
+                    <div class="product-card-meta">{{ pausedResumeLabel(p.resume_at) }} · 状态更新：{{ relativeTime(p.updated_at) }}</div>
                   </div>
                   <span class="status-badge paused">已暂停</span>
                   <button class="btn btn-primary" :disabled="submittingProduct === p.rule_id" @click="setAvailable(p.rule_id)">恢复接单</button>
@@ -2177,21 +2258,40 @@ async function run(task: () => Promise<void>) {
         <div v-if="bulkAvailabilityDialog.open" class="bulk-dialog-backdrop">
           <div class="bulk-dialog-card">
             <h2>{{ bulkAvailabilityDialog.mode === 'pause' ? '确认暂停全部接单？' : '确认恢复全部接单？' }}</h2>
-            <p>
-              {{
-                bulkAvailabilityDialog.mode === 'pause'
-                  ? `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，系统会在设置时间后自动恢复接单。`
-                  : `将恢复当前已暂停的 ${bulkAvailabilityProgress.total} 件商品，恢复后可以继续被派单。`
-              }}
-            </p>
+            <p>{{ bulkAvailabilityDialogDescription }}</p>
             <div v-if="bulkAvailabilityDialog.mode === 'pause'" class="field">
-              <label>恢复接单时间</label>
-              <input
-                v-model="bulkAvailabilityDialog.resumeAt"
-                type="datetime-local"
-                :min="toDatetimeLocalValue(new Date())"
-                :disabled="bulkAvailabilityProgress.processing"
-              />
+              <label>恢复方式</label>
+              <div class="pause-resume-mode" role="radiogroup" aria-label="恢复方式">
+                <button
+                  type="button"
+                  class="pause-resume-mode-btn"
+                  :class="{ active: bulkAvailabilityDialog.resumeMode === 'scheduled' }"
+                  :disabled="bulkAvailabilityProgress.processing"
+                  @click="bulkAvailabilityDialog.resumeMode = 'scheduled'"
+                >
+                  定时自动恢复
+                </button>
+                <button
+                  type="button"
+                  class="pause-resume-mode-btn"
+                  :class="{ active: bulkAvailabilityDialog.resumeMode === 'manual' }"
+                  :disabled="bulkAvailabilityProgress.processing"
+                  @click="bulkAvailabilityDialog.resumeMode = 'manual'"
+                >
+                  手动恢复
+                </button>
+              </div>
+              <template v-if="bulkAvailabilityDialog.resumeMode === 'scheduled'">
+                <label>恢复接单时间</label>
+                <input
+                  v-model="bulkAvailabilityDialog.resumeAt"
+                  type="datetime-local"
+                  :min="toDatetimeLocalValue(new Date())"
+                  :disabled="bulkAvailabilityProgress.processing"
+                />
+                <p class="pause-form-hint">到达该时间后，系统会自动恢复这些商品接单。</p>
+              </template>
+              <p v-else class="pause-form-hint">暂停后不会自动恢复，商户需要在已暂停区域手动点击恢复接单。</p>
             </div>
             <div v-if="bulkAvailabilityProgress.processing" class="bulk-progress">
               处理中 {{ bulkAvailabilityProgress.current }}/{{ bulkAvailabilityProgress.total }}

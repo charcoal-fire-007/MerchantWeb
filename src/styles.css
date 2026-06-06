@@ -527,6 +527,38 @@ a:focus-visible,
   animation: pauseFormPop 0.58s cubic-bezier(0.18, 0.9, 0.22, 1) both;
 }
 .pause-form label { font-size: 11px; color: var(--mute); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.pause-resume-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--canvas-soft);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.pause-resume-mode-btn {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: calc(var(--radius-md) - 2px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--body);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.pause-resume-mode-btn.active {
+  background: var(--canvas);
+  border-color: rgba(0,0,0,0.1);
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+}
+.pause-resume-mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .pause-form input.pause-time-input,
 .pause-form input[type="datetime-local"] {
   width: 100%; min-height: 42px; padding: 8px 12px; border-radius: var(--radius-md);
