@@ -201,6 +201,7 @@ const enabledProductsCollapseTouched = ref(false)
 const hasProductSearch = computed(() => productSearch.value.trim().length > 0)
 const isEnabledProductsCollapsed = computed(() => !hasProductSearch.value && enabledProductsCollapsed.value)
 let notificationsTimer: ReturnType<typeof setInterval> | null = null
+let productsTimer: ReturnType<typeof setInterval> | null = null
 const dispatchProductColors = [
   '#9fe870',
   '#67e8f9',
@@ -358,6 +359,7 @@ if (isLoggedIn.value) {
   void refreshProducts()
   void refreshNotifications()
   startNotificationsPolling()
+  startProductsPolling()
 }
 onMounted(() => {
   observeProductCards()
@@ -365,6 +367,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   stopNotificationsPolling()
+  stopProductsPolling()
   disconnectProductCardsObserver()
   cleanupMobilePickerMode()
   clearProductCardReturnTimers()
@@ -662,6 +665,7 @@ async function enterMerchantDashboard(result: LoginResponse) {
   await refreshProducts()
   await refreshNotifications()
   startNotificationsPolling()
+  startProductsPolling()
 }
 
 async function refreshMerchantSession() {
@@ -677,7 +681,7 @@ async function refreshMerchantSession() {
 }
 
 async function refreshProducts() {
-  await run(async () => {
+  const loadProducts = async () => {
     products.value = await api.listProducts()
 
     const session = merchantSession.value
@@ -687,7 +691,21 @@ async function refreshProducts() {
         merchantName: merchantNameFromProducts.value,
       })
     }
-  })
+  }
+
+  if (products.value.length === 0) {
+    await run(loadProducts)
+    return
+  }
+
+  try {
+    await loadProducts()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return
+    }
+    error.value = err instanceof Error ? err.message : '商品状态刷新失败'
+  }
 }
 
 async function refreshNotifications() {
@@ -724,10 +742,22 @@ function startNotificationsPolling() {
   notificationsTimer = setInterval(refreshNotifications, 30000)
 }
 
+function startProductsPolling() {
+  stopProductsPolling()
+  productsTimer = setInterval(refreshProducts, 30000)
+}
+
 function stopNotificationsPolling() {
   if (notificationsTimer) {
     clearInterval(notificationsTimer)
     notificationsTimer = null
+  }
+}
+
+function stopProductsPolling() {
+  if (productsTimer) {
+    clearInterval(productsTimer)
+    productsTimer = null
   }
 }
 
@@ -1563,6 +1593,7 @@ function logout(reason: LogoutReason = 'manual') {
   notificationsLoaded.value = false
   newDispatchBurstCount.value = 0
   stopNotificationsPolling()
+  stopProductsPolling()
   expandingProduct.value = null; pauseForm.resumeAt = ''; pauseForm.resumeMode = 'scheduled'
   navActive.value = 'dashboard'
   error.value = ''

@@ -121,6 +121,15 @@ test('app renders real dispatch notifications from api polling', () => {
   assert.match(appSource, /v-for="notification in (?:filteredNotifications|notifications)"/)
 })
 
+test('merchant products are polled so scheduled resume moves cards without manual refresh', () => {
+  assert.match(appSource, /let productsTimer: ReturnType<typeof setInterval> \| null = null/)
+  assert.match(appSource, /function startProductsPolling\(\)/)
+  assert.match(appSource, /setInterval\(refreshProducts, 30000\)/)
+  assert.match(appSource, /function stopProductsPolling\(\)/)
+  assert.match(appSource, /startProductsPolling\(\)/)
+  assert.match(appSource, /stopProductsPolling\(\)/)
+})
+
 test('login handles backend forced password change before entering merchant dashboard', () => {
   assert.match(appSource, /const forcePasswordChange = ref\(false\)/)
   assert.match(appSource, /const passwordChangeForm = reactive\(\{ newUsername: '', newPassword: '', confirmPassword: '' \}\)/)
