@@ -179,6 +179,15 @@ const disabledProducts = computed(() => products.value.filter((p) => !p.availabl
 const todayAssigned = computed(() => notificationsSummary.today_count)
 const onlineCount = computed(() => enabledProducts.value.length)
 const pendingCount = computed(() => disabledProducts.value.length)
+const bulkAvailabilityDialogDescription = computed(() => {
+  if (bulkAvailabilityDialog.mode === 'resume') {
+    return `将恢复当前已暂停的 ${bulkAvailabilityProgress.total} 件商品，恢复后可以继续被派单。`
+  }
+  if (bulkAvailabilityDialog.resumeMode === 'manual') {
+    return `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，商户需要在已暂停区域手动恢复接单。`
+  }
+  return `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，系统会在设置时间后自动恢复接单。`
+})
 const dashboardNotifications = computed(() => getRecentUnreadNotifications(
   notifications.value,
   { localReadIds: localReadNotificationIds.value },
@@ -2249,13 +2258,7 @@ async function run(task: () => Promise<void>) {
         <div v-if="bulkAvailabilityDialog.open" class="bulk-dialog-backdrop">
           <div class="bulk-dialog-card">
             <h2>{{ bulkAvailabilityDialog.mode === 'pause' ? '确认暂停全部接单？' : '确认恢复全部接单？' }}</h2>
-            <p>
-              {{
-                bulkAvailabilityDialog.mode === 'pause'
-                  ? `将暂停当前正在接单的 ${bulkAvailabilityProgress.total} 件商品，系统会在设置时间后自动恢复接单。`
-                  : `将恢复当前已暂停的 ${bulkAvailabilityProgress.total} 件商品，恢复后可以继续被派单。`
-              }}
-            </p>
+            <p>{{ bulkAvailabilityDialogDescription }}</p>
             <div v-if="bulkAvailabilityDialog.mode === 'pause'" class="field">
               <label>恢复方式</label>
               <div class="pause-resume-mode" role="radiogroup" aria-label="恢复方式">
