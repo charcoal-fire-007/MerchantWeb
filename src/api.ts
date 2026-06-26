@@ -26,6 +26,64 @@ export interface MerchantProduct {
   updated_at: string
 }
 
+export type InventorySourceType = 'owned' | 'catalog'
+
+export interface MerchantInventoryOption {
+  source_type: InventorySourceType
+  rule_id: string
+  product: string
+  keywords?: string[]
+  category?: string | null
+  available?: boolean | null
+  has_active_application: boolean
+  latest_quantity?: number | null
+}
+
+export interface MerchantInventoryOptionsResponse {
+  owned: MerchantInventoryOption[]
+  catalog: MerchantInventoryOption[]
+}
+
+export interface MerchantInventorySnapshotItemPayload {
+  source_type: InventorySourceType
+  rule_id: string
+  quantity: number
+}
+
+export interface MerchantInventorySnapshotItem {
+  id: string
+  rule_id: string
+  product: string
+  source_type: InventorySourceType
+  quantity: number
+  product_application_id?: string | null
+  submitted_at: string
+}
+
+export interface MerchantInventorySnapshotResponse {
+  id: string
+  merchant_id: string
+  merchant_name: string
+  submitted_at: string
+  items: MerchantInventorySnapshotItem[]
+}
+
+export interface MerchantInventoryLatestItem {
+  merchant_id: string
+  merchant_name: string
+  rule_id: string
+  product: string
+  source_type: InventorySourceType
+  quantity: number
+  product_application_id?: string | null
+  submitted_at: string
+}
+
+export interface MerchantInventoryLatestResponse {
+  app_code: string
+  items: MerchantInventoryLatestItem[]
+}
+
 export interface MerchantBulkAvailabilityResponse {
   success_count: number
   failed_count: number
@@ -303,6 +361,23 @@ export class ApiClient {
 
   async listProducts(appCode = 'order_dispatch'): Promise<MerchantProduct[]> {
     return this.request<MerchantProduct[]>(`/api/merchant/products?app_code=${encodeURIComponent(appCode)}`)
+  }
+
+  async listInventoryOptions(): Promise<MerchantInventoryOptionsResponse> {
+    return this.request<MerchantInventoryOptionsResponse>('/api/merchant/inventory/options')
+  }
+
+  async listLatestInventory(): Promise<MerchantInventoryLatestResponse> {
+    return this.request<MerchantInventoryLatestResponse>('/api/merchant/inventory/latest')
+  }
+
+  async submitInventorySnapshot(
+    items: MerchantInventorySnapshotItemPayload[]
+  ): Promise<MerchantInventorySnapshotResponse> {
+    return this.request<MerchantInventorySnapshotResponse>('/api/merchant/inventory/snapshots', {
+      method: 'POST',
+      body: JSON.stringify({ items })
+    })
   }
 
   async listNotifications(limit = 20): Promise<MerchantNotificationsResponse> {

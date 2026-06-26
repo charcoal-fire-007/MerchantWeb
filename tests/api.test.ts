@@ -294,6 +294,106 @@ test('ApiClient requests merchant product application options endpoint', async (
   globalThis.fetch = originalFetch
 })
 
+test('ApiClient requests merchant inventory options endpoint', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+
+  globalThis.fetch = async (input) => {
+    requestedPath = String(input)
+    return new Response(JSON.stringify({
+      owned: [{
+        source_type: 'owned',
+        rule_id: 'rule-g9',
+        product: '佳能 G9',
+        keywords: [],
+        available: true,
+        has_active_application: false,
+        latest_quantity: 3,
+      }],
+      catalog: [{
+        source_type: 'catalog',
+        rule_id: 'rule-pocket3',
+        product: '大疆 Pocket 3',
+        keywords: [],
+        category: '相机',
+        has_active_application: true,
+        latest_quantity: null,
+      }]
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.listInventoryOptions()
+
+  assert.equal(requestedPath, '/api/merchant/inventory/options')
+  assert.equal(result.owned[0].product, '佳能 G9')
+  assert.equal(result.catalog[0].source_type, 'catalog')
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient submits merchant inventory snapshot in one batch', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  let requestedMethod = ''
+  let requestedBody = ''
+
+  globalThis.fetch = async (input, init) => {
+    requestedPath = String(input)
+    requestedMethod = init?.method || ''
+    requestedBody = String(init?.body || '')
+    return new Response(JSON.stringify({
+      id: 'snapshot-1',
+      merchant_id: 'merchant-1',
+      merchant_name: '小胡租赁',
+      submitted_at: '2026-06-26T06:00:00.000Z',
+      items: [],
+    }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.submitInventorySnapshot([
+    { source_type: 'owned', rule_id: 'rule-g9', quantity: 3 },
+    { source_type: 'catalog', rule_id: 'rule-pocket3', quantity: 2 },
+  ])
+
+  assert.equal(requestedPath, '/api/merchant/inventory/snapshots')
+  assert.equal(requestedMethod, 'POST')
+  assert.deepEqual(JSON.parse(requestedBody), {
+    items: [
+      { source_type: 'owned', rule_id: 'rule-g9', quantity: 3 },
+      { source_type: 'catalog', rule_id: 'rule-pocket3', quantity: 2 },
+    ]
+  })
+  assert.equal(result.id, 'snapshot-1')
+  globalThis.fetch = originalFetch
+})
+
+test('ApiClient requests merchant latest inventory endpoint', async () => {
+  const client = new ApiClient()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+
+  globalThis.fetch = async (input) => {
+    requestedPath = String(input)
+    return new Response(JSON.stringify({ app_code: 'order_dispatch', items: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const result = await client.listLatestInventory()
+
+  assert.equal(requestedPath, '/api/merchant/inventory/latest')
+  assert.deepEqual(result, { app_code: 'order_dispatch', items: [] })
+  globalThis.fetch = originalFetch
+})
+
 test('ApiClient submits merchant existing product application', async () => {
   const client = new ApiClient()
   const originalFetch = globalThis.fetch

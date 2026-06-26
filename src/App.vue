@@ -10,6 +10,8 @@ import {
   type MerchantNotification,
   type MerchantNotificationTrendDay,
   type MerchantPriceIssueType,
+  type MerchantInventoryLatestItem,
+  type MerchantInventoryOption,
   type MerchantProductApplicationOption,
   type MerchantProductApplicationRecord,
   type MerchantProduct,
@@ -21,12 +23,14 @@ import {
   type MerchantSession,
 } from './auth'
 import SplitRevealText from './components/SplitRevealText.vue'
+import { buildInventorySnapshotPayload } from './inventory'
 import { getRecentUnreadNotifications } from './notifications'
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type PauseResumeMode = 'scheduled' | 'manual'
 type LogoutReason = 'manual' | 'expired' | 'password-reset-cancelled'
 type FeedbackCenterMode = 'product_application' | 'feedback'
+type InventorySourceType = 'owned' | 'catalog'
 
 interface SubmissionRecord {
   id: string
@@ -52,6 +56,16 @@ interface DispatchChartBar {
   total: number
   heightPercent: number
   segments: DispatchChartBarSegment[]
+}
+
+interface InventoryDraftRow {
+  key: string
+  source_type: InventorySourceType
+  rule_id: string
+  product: string
+  quantity: string
+  latestQuantity: number | null
+  has_active_application: boolean
 }
 
 const AUTH_TOKEN_KEY = 'merchant_token'
@@ -103,6 +117,19 @@ const productApplicationOptionsLoading = ref(false)
 const productApplicationSubmitting = ref(false)
 const feedbackNotice = ref('')
 const feedbackError = ref('')
+const inventoryOptions = reactive<{ owned: MerchantInventoryOption[]; catalog: MerchantInventoryOption[] }>({
+  owned: [],
+  catalog: [],
+})
+const latestInventoryItems = ref<MerchantInventoryLatestItem[]>([])
+const inventoryRows = ref<InventoryDraftRow[]>([])
+const inventorySourceMode = ref<InventorySourceType>('owned')
+const inventorySearch = ref('')
+const inventoryLoading = ref(false)
+const inventoryLoaded = ref(false)
+const inventorySubmitting = ref(false)
+const inventoryNotice = ref('')
+const inventoryError = ref('')
 const existingProductApplicationForm = reactive({
   productId: '',
   reason: '',
@@ -193,7 +220,7 @@ const dashboardNotifications = computed(() => getRecentUnreadNotifications(
   { localReadIds: localReadNotificationIds.value },
 ))
 const navUnreadCount = computed(() => navActive.value === 'notifications' ? 0 : dashboardNotifications.value.length)
-const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, notifications: 2, feedback: 3 }[navActive.value] ?? 0))
+const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, machineInventory: 2, notifications: 3, feedback: 4 }[navActive.value] ?? 0))
 const recentNotifications = computed(() => dashboardNotifications.value.slice(0, 3))
 const hasMoreNotifications = computed(() => dashboardNotifications.value.length > recentNotifications.value.length)
 const dispatchTrendTotal = computed(() => dispatchTrend.value.reduce((total, day) => total + day.dispatch_count, 0))
@@ -232,6 +259,29 @@ const filteredDisabled = computed(() => {
   if (!kw) return disabledProducts.value
   return disabledProducts.value.filter((p) => p.product.toLowerCase().includes(kw))
 })
+const latestInventoryMap = computed(() =>
+  new Map(latestInventoryItems.value.map((item) => [item.rule_id, item]))
+)
+const inventorySelectedRuleIds = computed(() => new Set(inventoryRows.value.map((row) => row.rule_id)))
+const currentInventoryOptions = computed(() =>
+  inventorySourceMode.value === 'owned' ? inventoryOptions.owned : inventoryOptions.catalog
+)
+const filteredInventoryOptions = computed(() => {
+  const keyword = inventorySearch.value.trim().toLowerCase()
+  const rows = currentInventoryOptions.value
+  if (!keyword) return rows
+  return rows.filter((option) => {
+    const haystack = [
+      option.product,
+      option.category || '',
+      ...(option.keywords || []),
+    ].join(' ').toLowerCase()
+    return haystack.includes(keyword)
+  })
+})
+const inventorySubmitDisabled = computed(() =>
+  inventorySubmitting.value || inventoryRows.value.length === 0
+)
 const feedbackProductOptions = computed(() => {
   const seen = new Set<string>()
   return products.value.filter((product) => {
@@ -404,6 +454,9 @@ watch(isEnabledProductsCollapsed, () => {
 watch(navActive, () => {
   if (navActive.value === 'feedback') {
     void refreshFeedbackCenter()
+  }
+  if (navActive.value === 'machineInventory' && !inventoryLoaded.value) {
+    void refreshInventoryOptions()
   }
 })
 
@@ -714,6 +767,116 @@ async function refreshProducts() {
       return
     }
     error.value = err instanceof Error ? err.message : '商品状态刷新失败'
+  }
+}
+
+async function refreshInventoryOptions() {
+  inventoryLoading.value = true
+  inventoryError.value = ''
+  try {
+    const [options, latest] = await Promise.all([
+      api.listInventoryOptions(),
+      api.listLatestInventory(),
+    ])
+    inventoryOptions.owned = options.owned || []
+    inventoryOptions.catalog = options.catalog || []
+    latestInventoryItems.value = latest.items || []
+    inventoryLoaded.value = true
+    syncInventoryRows()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return
+    }
+    inventoryError.value = err instanceof Error ? err.message : '库存加载失败'
+  } finally {
+    inventoryLoading.value = false
+  }
+}
+
+function syncInventoryRows() {
+  const optionMap = new Map<string, MerchantInventoryOption>()
+  for (const option of [...inventoryOptions.owned, ...inventoryOptions.catalog]) {
+    optionMap.set(option.rule_id, option)
+  }
+  inventoryRows.value = inventoryRows.value.map((row) => {
+    const option = optionMap.get(row.rule_id)
+    if (!option) return row
+    return {
+      ...row,
+      source_type: option.source_type,
+      product: option.product,
+      latestQuantity: inventoryOptionLatestQuantity(option),
+      has_active_application: option.has_active_application,
+    }
+  })
+}
+
+function inventoryOptionKey(option: MerchantInventoryOption) {
+  return `${option.source_type}:${option.rule_id}`
+}
+
+function inventoryOptionLatestQuantity(option: MerchantInventoryOption) {
+  const latest = latestInventoryMap.value.get(option.rule_id)
+  if (typeof latest?.quantity === 'number') return latest.quantity
+  return typeof option.latest_quantity === 'number' ? option.latest_quantity : null
+}
+
+function inventorySourceText(sourceType: InventorySourceType) {
+  return sourceType === 'owned' ? '我的商品' : '平台库'
+}
+
+function inventoryOptionStatusText(option: MerchantInventoryOption) {
+  if (option.source_type === 'owned') {
+    return option.available === false ? '已暂停' : '接单中'
+  }
+  return option.has_active_application ? '已申请' : '待申请'
+}
+
+function addInventoryOption(option: MerchantInventoryOption) {
+  if (inventorySelectedRuleIds.value.has(option.rule_id)) {
+    return
+  }
+  inventoryRows.value.push({
+    key: inventoryOptionKey(option),
+    source_type: option.source_type,
+    rule_id: option.rule_id,
+    product: option.product,
+    quantity: '',
+    latestQuantity: inventoryOptionLatestQuantity(option),
+    has_active_application: option.has_active_application,
+  })
+  inventoryNotice.value = ''
+  inventoryError.value = ''
+}
+
+function removeInventoryRow(key: string) {
+  inventoryRows.value = inventoryRows.value.filter((row) => row.key !== key)
+}
+
+async function submitInventorySnapshot() {
+  inventoryNotice.value = ''
+  inventoryError.value = ''
+  if (inventoryRows.value.length === 0) {
+    inventoryError.value = '请先加入机器'
+    return
+  }
+
+  const { items, error } = buildInventorySnapshotPayload(inventoryRows.value)
+  if (error) {
+    inventoryError.value = error
+    return
+  }
+
+  inventorySubmitting.value = true
+  try {
+    const result = await api.submitInventorySnapshot(items)
+    inventoryNotice.value = `已提交 ${result.items.length || items.length} 台机器库存`
+    inventoryRows.value = []
+    await refreshInventoryOptions()
+  } catch (err) {
+    inventoryError.value = err instanceof Error ? err.message : '库存提交失败'
+  } finally {
+    inventorySubmitting.value = false
   }
 }
 
@@ -1594,6 +1757,15 @@ function logout(reason: LogoutReason = 'manual') {
   api.setToken(''); products.value = []
   notifications.value = []
   dispatchTrend.value = []
+  inventoryOptions.owned = []
+  inventoryOptions.catalog = []
+  latestInventoryItems.value = []
+  inventoryRows.value = []
+  inventorySearch.value = ''
+  inventorySourceMode.value = 'owned'
+  inventoryLoaded.value = false
+  inventoryNotice.value = ''
+  inventoryError.value = ''
   notificationsSummary.today_count = 0
   notificationsSummary.unread_count = 0
   knownNotificationIds.value = new Set()
@@ -1780,6 +1952,10 @@ async function run(task: () => Promise<void>) {
         <button :class="{ active: navActive === 'products' }" @click="navActive = 'products'">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
           商品管理
+        </button>
+        <button :class="{ active: navActive === 'machineInventory' }" @click="navActive = 'machineInventory'">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="8" cy="7" r="1"/><circle cx="8" cy="12" r="1"/><circle cx="8" cy="17" r="1"/></svg>
+          机器库存
         </button>
         <button :class="{ active: navActive === 'notifications' }" @click="goToNotifications">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -2251,6 +2427,108 @@ async function run(task: () => Promise<void>) {
             <div v-if="products.length === 0" class="empty-state">
               <h3>暂无商品</h3>
               <p>平台尚未为您分配任何商品权限，请联系管理员。</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- Machine Inventory -->
+        <template v-if="navActive === 'machineInventory'">
+          <div class="inventory-page">
+            <div class="inventory-page-header">
+              <h1>机器库存</h1>
+            </div>
+
+            <p v-if="inventoryNotice" class="inventory-notice">{{ inventoryNotice }}</p>
+            <p v-if="inventoryError" class="inventory-error">{{ inventoryError }}</p>
+
+            <div class="inventory-layout">
+              <section class="inventory-picker-card">
+                <div class="inventory-picker-toolbar">
+                  <strong>选择机器</strong>
+                  <input v-model="inventorySearch" placeholder="搜索机器" />
+                  <div class="inventory-source-tabs" role="tablist" aria-label="机器来源">
+                    <button
+                      type="button"
+                      :class="{ active: inventorySourceMode === 'owned' }"
+                      @click="inventorySourceMode = 'owned'"
+                    >
+                      我的商品
+                    </button>
+                    <button
+                      type="button"
+                      :class="{ active: inventorySourceMode === 'catalog' }"
+                      @click="inventorySourceMode = 'catalog'"
+                    >
+                      平台机器库
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="inventoryLoading" class="notif-empty">加载中...</div>
+                <div v-else class="inventory-option-list">
+                  <button
+                    v-for="option in filteredInventoryOptions"
+                    :key="inventoryOptionKey(option)"
+                    type="button"
+                    class="inventory-option-row"
+                    :class="{ selected: inventorySelectedRuleIds.has(option.rule_id) }"
+                    :disabled="inventorySelectedRuleIds.has(option.rule_id)"
+                    @click="addInventoryOption(option)"
+                  >
+                    <span class="inventory-option-main">
+                      <strong>{{ option.product }}</strong>
+                      <small v-if="inventoryOptionLatestQuantity(option) !== null">
+                        上次 {{ inventoryOptionLatestQuantity(option) }} 台
+                      </small>
+                    </span>
+                    <span class="inventory-option-tags">
+                      <em class="inventory-chip">{{ inventorySourceText(option.source_type) }}</em>
+                      <em class="inventory-chip muted">{{ inventoryOptionStatusText(option) }}</em>
+                    </span>
+                    <span class="inventory-add-text">
+                      {{ inventorySelectedRuleIds.has(option.rule_id) ? '已加入' : '加入' }}
+                    </span>
+                  </button>
+                  <div v-if="filteredInventoryOptions.length === 0" class="inventory-empty">暂无机器</div>
+                </div>
+              </section>
+
+              <section class="inventory-list-card">
+                <div class="inventory-list-header">
+                  <h2>上报清单</h2>
+                  <span>{{ inventoryRows.length }} 台</span>
+                </div>
+
+                <div v-if="inventoryRows.length === 0" class="inventory-empty">从左侧加入机器</div>
+                <div v-else class="inventory-draft-list">
+                  <div v-for="row in inventoryRows" :key="row.key" class="inventory-draft-row">
+                    <div class="inventory-draft-main">
+                      <strong>{{ row.product }}</strong>
+                      <span>
+                        {{ inventorySourceText(row.source_type) }}
+                        <template v-if="row.latestQuantity !== null"> · 上次 {{ row.latestQuantity }} 台</template>
+                      </span>
+                    </div>
+                    <label class="inventory-quantity-field">
+                      <span>库存数量</span>
+                      <input
+                        v-model="row.quantity"
+                        inputmode="numeric"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                      />
+                    </label>
+                    <button type="button" class="btn btn-ghost" @click="removeInventoryRow(row.key)">移除</button>
+                  </div>
+                </div>
+
+                <div class="inventory-submit-footer">
+                  <button class="btn btn-primary" :disabled="inventorySubmitDisabled" @click="submitInventorySnapshot">
+                    {{ inventorySubmitting ? '提交中...' : '提交库存快照' }}
+                  </button>
+                </div>
+              </section>
             </div>
           </div>
         </template>
