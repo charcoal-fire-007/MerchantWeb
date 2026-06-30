@@ -701,11 +701,22 @@ test('machine inventory search enter reduces picker clicks without adding button
   assert.match(appSource, /function handleInventorySearchEnter\(event: KeyboardEvent\)/)
   assert.match(appSource, /if \(event\.isComposing\) \{[\s\S]*return[\s\S]*\}/)
   assert.match(appSource, /event\.preventDefault\(\)/)
+  assert.match(appSource, /const exactOption = findExactInventorySearchOption\(\)/)
+  assert.match(appSource, /if \(exactOption\) \{[\s\S]*addInventoryOption\(exactOption\)[\s\S]*return[\s\S]*\}/)
   assert.match(appSource, /const \[firstOption,\s*secondOption\] = filteredInventoryOptions\.value/)
   assert.match(appSource, /if \(firstOption && !secondOption\) \{[\s\S]*addInventoryOption\(firstOption\)[\s\S]*return[\s\S]*\}/)
   assert.match(appSource, /if \(inventorySearchHasNoMatches\.value\) \{[\s\S]*openInventoryProductApplicationFromSearch\(\)[\s\S]*\}/)
   assert.doesNotMatch(appSource, /class="inventory-search-submit"/)
   assert.doesNotMatch(cssSource, /\.inventory-search-submit/)
+})
+
+test('machine inventory search enter prefers an exact product match before ambiguous fuzzy matches', () => {
+  const exactSearchSource = appSource.match(/function findExactInventorySearchOption\(\) \{[\s\S]*?\r?\n\}\r?\n\r?\nfunction addInventoryOption/)?.[0] || ''
+  const searchEnterSource = appSource.match(/function handleInventorySearchEnter\(event: KeyboardEvent\) \{[\s\S]*?\r?\n\}\r?\n\r?\nfunction handleInventorySearchEscape/)?.[0] || ''
+  assert.match(exactSearchSource, /const keyword = inventorySearchDraftName\.value\.toLowerCase\(\)/)
+  assert.match(exactSearchSource, /if \(!keyword\) return null/)
+  assert.match(exactSearchSource, /return filteredInventoryOptions\.value\.find\(\(option\) => option\.product\.trim\(\)\.toLowerCase\(\) === keyword\) \|\| null/)
+  assert.match(searchEnterSource, /const exactOption = findExactInventorySearchOption\(\)[\s\S]*if \(exactOption\) \{[\s\S]*addInventoryOption\(exactOption\)[\s\S]*return[\s\S]*\}[\s\S]*const \[firstOption,\s*secondOption\] = filteredInventoryOptions\.value/)
 })
 
 test('machine inventory search escape clears filtering without adding controls', () => {

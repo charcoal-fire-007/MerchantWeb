@@ -954,6 +954,12 @@ function shouldShowInventoryOptionStatus(option: MerchantInventoryOption) {
   return option.source_type === 'owned' && option.available === false
 }
 
+function findExactInventorySearchOption() {
+  const keyword = inventorySearchDraftName.value.toLowerCase()
+  if (!keyword) return null
+  return filteredInventoryOptions.value.find((option) => option.product.trim().toLowerCase() === keyword) || null
+}
+
 function addInventoryOption(option: MerchantInventoryOption) {
   const existingRow = inventoryRows.value.find((row) => row.rule_id === option.rule_id)
   if (existingRow) {
@@ -982,6 +988,12 @@ function handleInventorySearchEnter(event: KeyboardEvent) {
   }
 
   event.preventDefault()
+  const exactOption = findExactInventorySearchOption()
+  if (exactOption) {
+    addInventoryOption(exactOption)
+    return
+  }
+
   const [firstOption, secondOption] = filteredInventoryOptions.value
   if (firstOption && !secondOption) {
     addInventoryOption(firstOption)
