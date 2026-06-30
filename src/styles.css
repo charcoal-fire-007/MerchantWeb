@@ -813,7 +813,7 @@ a:focus-visible,
   border-radius: var(--radius-md);
 }
 .inventory-empty {
-  min-height: 22px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
