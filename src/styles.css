@@ -731,9 +731,9 @@ a:focus-visible,
   width: 100%;
   min-height: 26px;
   padding: 0 9px;
-  border: 1px solid rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.06);
   border-radius: calc(var(--radius-md) - 2px);
-  background: var(--canvas);
+  background: rgba(255,255,255,0.5);
   color: var(--ink);
   outline: none;
   font-size: 13px;
