@@ -762,6 +762,8 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.doesNotMatch(inventoryOptionNameRule, /font-weight:\s*900/)
   assert.equal(cssRule('.inventory-option-select'), '')
   const inventoryOptionFocusRule = cssRule('.inventory-option-row:focus-visible')
+  assert.match(inventoryOptionFocusRule, /border-color:\s*rgba\(159,232,112,0\.44\)/)
+  assert.doesNotMatch(inventoryOptionFocusRule, /border-color:\s*rgba\(159,232,112,0\.56\)/)
   assert.match(inventoryOptionFocusRule, /box-shadow:\s*0 0 0 3px rgba\(159,232,112,0\.22\)/)
   assert.doesNotMatch(inventoryOptionFocusRule, /rgba\(159,232,112,0\.28\)/)
   assert.match(cssRule('.inventory-option-row[tabindex="0"]'), /cursor:\s*pointer/)
