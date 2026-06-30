@@ -44,3 +44,25 @@ export function buildInventorySnapshotPayload(
 
   return { items, error: '' }
 }
+
+export function calculateInventoryQuantityTotal(rows: InventorySnapshotDraftRow[]) {
+  return rows.reduce((total, row) => {
+    const rawQuantity = row.quantity.trim()
+    if (!/^\d+$/.test(rawQuantity)) return total
+
+    const quantity = Number(rawQuantity)
+    if (!Number.isSafeInteger(quantity) || quantity < 0) return total
+
+    return total + quantity
+  }, 0)
+}
+
+export function hasValidInventorySnapshotQuantities(rows: InventorySnapshotDraftRow[]) {
+  return rows.length > 0 && rows.every((row) => {
+    const rawQuantity = row.quantity.trim()
+    if (!/^\d+$/.test(rawQuantity)) return false
+
+    const quantity = Number(rawQuantity)
+    return Number.isSafeInteger(quantity) && quantity >= 0
+  })
+}

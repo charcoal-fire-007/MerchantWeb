@@ -23,8 +23,19 @@ import {
   type MerchantSession,
 } from './auth'
 import SplitRevealText from './components/SplitRevealText.vue'
-import { buildInventorySnapshotPayload } from './inventory'
+import { buildInventorySnapshotPayload, hasValidInventorySnapshotQuantities } from './inventory'
 import { getRecentUnreadNotifications } from './notifications'
+import {
+  PREVIEW_INVENTORY_OPTIONS,
+  PREVIEW_LATEST_INVENTORY,
+  PREVIEW_MERCHANT_SESSION,
+  PREVIEW_NOTIFICATIONS_RESPONSE,
+  PREVIEW_PRODUCTS,
+  PREVIEW_TOKEN,
+  createPreviewFeedbackRecord,
+  createPreviewProductApplicationRecord,
+  isLocalPreviewMode,
+} from './preview'
 
 type BulkAvailabilityMode = 'pause' | 'resume'
 type PauseResumeMode = 'scheduled' | 'manual'
@@ -71,9 +82,13 @@ interface InventoryDraftRow {
 const AUTH_TOKEN_KEY = 'merchant_token'
 const REMEMBER_DEVICE_KEY = 'merchant_remember_device'
 const REMEMBERED_USERNAME_KEY = 'merchant_remembered_username'
+const previewMode = isLocalPreviewMode(
+  import.meta.env.DEV,
+  typeof window === 'undefined' ? '' : window.location.search,
+)
 
-const token = ref(readStoredAuthToken())
-const merchantSession = ref<MerchantSession | null>(readStoredMerchantSession())
+const token = ref(previewMode ? PREVIEW_TOKEN : readStoredAuthToken())
+const merchantSession = ref<MerchantSession | null>(previewMode ? PREVIEW_MERCHANT_SESSION : readStoredMerchantSession())
 const loginForm = reactive({ username: readRememberedUsername(), password: '' })
 const passwordChangeForm = reactive({ newUsername: '', newPassword: '', confirmPassword: '' })
 const passwordVisibility = reactive({ loginPassword: false, newPassword: false, confirmPassword: false })
@@ -108,6 +123,7 @@ const productApplicationPickerOpen = ref(false)
 const mobilePickerMode = ref(false)
 const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
 const submissionRecordsExpanded = ref(false)
+const feedbackPanelExpanded = ref(false)
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
 const priceProductPickerOpen = ref(false)
@@ -123,7 +139,6 @@ const inventoryOptions = reactive<{ owned: MerchantInventoryOption[]; catalog: M
 })
 const latestInventoryItems = ref<MerchantInventoryLatestItem[]>([])
 const inventoryRows = ref<InventoryDraftRow[]>([])
-const inventorySourceMode = ref<InventorySourceType>('owned')
 const inventorySearch = ref('')
 const inventoryLoading = ref(false)
 const inventoryLoaded = ref(false)
@@ -172,7 +187,7 @@ const bulkAvailabilityDialog = reactive({
   resumeAt: '',
 })
 const bulkAvailabilityProgress = reactive({ processing: false, current: 0, total: 0 })
-const navActive = ref('dashboard')
+const navActive = ref(previewMode ? 'machineInventory' : 'dashboard')
 const notifOpen = ref(true)
 const visibleProductCardIds = ref<Set<string>>(new Set())
 const visibleDashboardCardIds = ref<Set<string>>(new Set())
@@ -220,7 +235,7 @@ const dashboardNotifications = computed(() => getRecentUnreadNotifications(
   { localReadIds: localReadNotificationIds.value },
 ))
 const navUnreadCount = computed(() => navActive.value === 'notifications' ? 0 : dashboardNotifications.value.length)
-const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, machineInventory: 2, notifications: 3, feedback: 4 }[navActive.value] ?? 0))
+const navActiveIndex = computed(() => ({ dashboard: 0, products: 1, machineInventory: 2, notifications: 3 }[navActive.value] ?? 0))
 const recentNotifications = computed(() => dashboardNotifications.value.slice(0, 3))
 const hasMoreNotifications = computed(() => dashboardNotifications.value.length > recentNotifications.value.length)
 const dispatchTrendTotal = computed(() => dispatchTrend.value.reduce((total, day) => total + day.dispatch_count, 0))
@@ -263,12 +278,29 @@ const latestInventoryMap = computed(() =>
   new Map(latestInventoryItems.value.map((item) => [item.rule_id, item]))
 )
 const inventorySelectedRuleIds = computed(() => new Set(inventoryRows.value.map((row) => row.rule_id)))
-const currentInventoryOptions = computed(() =>
-  inventorySourceMode.value === 'owned' ? inventoryOptions.owned : inventoryOptions.catalog
+const inventoryRowByRuleId = computed(() =>
+  new Map(inventoryRows.value.map((row) => [row.rule_id, row]))
 )
+const inventoryOptionPool = computed(() => [...inventoryOptions.owned, ...inventoryOptions.catalog])
+const inventoryOptionByRuleId = computed(() =>
+  new Map(inventoryOptionPool.value.map((option) => [option.rule_id, option]))
+)
+const selectedInventoryOptions = computed(() =>
+  inventoryRows.value.map((row) => inventoryOptionByRuleId.value.get(row.rule_id) || ({
+    source_type: row.source_type,
+    rule_id: row.rule_id,
+    product: row.product,
+    keywords: [],
+    category: null,
+    available: row.source_type === 'owned' ? true : null,
+    has_active_application: row.has_active_application,
+    latest_quantity: row.latestQuantity,
+  }))
+)
+const inventorySearchDraftName = computed(() => inventorySearch.value.trim())
 const filteredInventoryOptions = computed(() => {
-  const keyword = inventorySearch.value.trim().toLowerCase()
-  const rows = currentInventoryOptions.value
+  const keyword = inventorySearchDraftName.value.toLowerCase()
+  const rows = inventoryOptionPool.value
   if (!keyword) return rows
   return rows.filter((option) => {
     const haystack = [
@@ -279,8 +311,28 @@ const filteredInventoryOptions = computed(() => {
     return haystack.includes(keyword)
   })
 })
+const filteredInventoryOptionRows = computed(() => {
+  const selectedRuleIds = inventorySelectedRuleIds.value
+  const options = [
+    ...selectedInventoryOptions.value,
+    ...filteredInventoryOptions.value.filter((option) => !selectedRuleIds.has(option.rule_id)),
+  ]
+  return options.map((option) => ({
+    option,
+    row: inventoryRowByRuleId.value.get(option.rule_id) || null,
+  }))
+})
+const inventorySearchHasNoMatches = computed(() =>
+  Boolean(inventorySearchDraftName.value) && filteredInventoryOptions.value.length === 0
+)
+const inventoryShouldShowEmptyState = computed(() =>
+  inventorySearchHasNoMatches.value || filteredInventoryOptionRows.value.length === 0
+)
+const inventoryCanSubmit = computed(() =>
+  inventoryRows.value.length > 0 && hasValidInventorySnapshotQuantities(inventoryRows.value)
+)
 const inventorySubmitDisabled = computed(() =>
-  inventorySubmitting.value || inventoryRows.value.length === 0
+  inventorySubmitting.value || !inventoryCanSubmit.value
 )
 const feedbackProductOptions = computed(() => {
   const seen = new Set<string>()
@@ -351,7 +403,7 @@ const submissionRecords = computed<SubmissionRecord[]>(() => {
   return [...productApplicationItems, ...feedbackItems]
     .sort((left, right) => recordTime(right.createdAt) - recordTime(left.createdAt))
 })
-const hasHiddenSubmissionRecords = computed(() => submissionRecords.value.length > 2)
+const hasHiddenSubmissionRecords = computed(() => submissionRecords.value.length > 0)
 const visibleSubmissionRecords = computed(() =>
   submissionRecordsExpanded.value ? submissionRecords.value : submissionRecords.value.slice(0, 2)
 )
@@ -412,11 +464,14 @@ api.setUnauthorizedHandler(() => {
 
 if (isLoggedIn.value) {
   api.setToken(token.value)
-  if (!merchantSession.value) {
+  if (!merchantSession.value && !previewMode) {
     void refreshMerchantSession()
   }
   void refreshProducts()
   void refreshNotifications()
+  if (navActive.value === 'machineInventory') {
+    void refreshInventoryOptions()
+  }
   startNotificationsPolling()
   startProductsPolling()
 }
@@ -452,11 +507,11 @@ watch(isEnabledProductsCollapsed, () => {
   }
 })
 watch(navActive, () => {
-  if (navActive.value === 'feedback') {
-    void refreshFeedbackCenter()
-  }
   if (navActive.value === 'machineInventory' && !inventoryLoaded.value) {
     void refreshInventoryOptions()
+  }
+  if (navActive.value === 'machineInventory' && feedbackPanelExpanded.value) {
+    void refreshFeedbackCenter()
   }
 })
 
@@ -526,6 +581,43 @@ function clearPriceProductPickerCloseTimer() {
     clearTimeout(priceProductPickerCloseTimer)
     priceProductPickerCloseTimer = null
   }
+}
+
+function resetFeedbackPanelState(options: { clearDrafts?: boolean } = {}) {
+  clearProductApplicationPickerCloseTimer()
+  clearPriceProductPickerCloseTimer()
+  productApplicationPickerOpen.value = false
+  priceProductPickerOpen.value = false
+  feedbackNotice.value = ''
+  feedbackError.value = ''
+
+  if (!options.clearDrafts) return
+
+  feedbackPanelExpanded.value = false
+  feedbackCenterMode.value = 'product_application'
+  feedbackMode.value = 'price_suggestion'
+  submissionRecordsExpanded.value = false
+  feedbackRecords.value = []
+  productApplicationRecords.value = []
+  productApplicationOptions.value = []
+  productApplicationSearchInput.value = ''
+  productApplicationSearchQuery.value = ''
+  existingProductApplicationForm.productId = ''
+  existingProductApplicationForm.reason = ''
+  newProductApplicationForm.product = ''
+  newProductApplicationForm.modelNote = ''
+  newProductApplicationForm.reason = ''
+  issueFeedbackForm.issueType = 'page'
+  issueFeedbackForm.description = ''
+  priceFeedbackForm.product = ''
+  priceFeedbackForm.ruleId = ''
+  priceFeedbackForm.priceIssueType = 'price_unreasonable'
+  priceFeedbackForm.pricePerDay = ''
+  priceFeedbackForm.reason = ''
+  feedbackLoading.value = false
+  feedbackSubmitting.value = false
+  productApplicationOptionsLoading.value = false
+  productApplicationSubmitting.value = false
 }
 
 function triggerProductCardReturn(ruleId: string) {
@@ -731,6 +823,10 @@ async function enterMerchantDashboard(result: LoginResponse) {
 }
 
 async function refreshMerchantSession() {
+  if (previewMode) {
+    saveMerchantSession(PREVIEW_MERCHANT_SESSION)
+    return
+  }
   try {
     const result = await api.getCurrentMerchant()
     saveMerchantSession(extractMerchantSession(result))
@@ -743,6 +839,14 @@ async function refreshMerchantSession() {
 }
 
 async function refreshProducts() {
+  if (previewMode) {
+    products.value = PREVIEW_PRODUCTS.map((product) => ({
+      ...product,
+      keywords: [...product.keywords],
+    }))
+    return
+  }
+
   const loadProducts = async () => {
     products.value = await api.listProducts()
 
@@ -773,6 +877,22 @@ async function refreshProducts() {
 async function refreshInventoryOptions() {
   inventoryLoading.value = true
   inventoryError.value = ''
+  if (previewMode) {
+    inventoryOptions.owned = PREVIEW_INVENTORY_OPTIONS.owned.map((option) => ({
+      ...option,
+      keywords: [...(option.keywords || [])],
+    }))
+    inventoryOptions.catalog = PREVIEW_INVENTORY_OPTIONS.catalog.map((option) => ({
+      ...option,
+      keywords: [...(option.keywords || [])],
+    }))
+    latestInventoryItems.value = PREVIEW_LATEST_INVENTORY.items.map((item) => ({ ...item }))
+    inventoryLoaded.value = true
+    syncInventoryRows()
+    inventoryLoading.value = false
+    return
+  }
+
   try {
     const [options, latest] = await Promise.all([
       api.listInventoryOptions(),
@@ -821,49 +941,134 @@ function inventoryOptionLatestQuantity(option: MerchantInventoryOption) {
   return typeof option.latest_quantity === 'number' ? option.latest_quantity : null
 }
 
-function inventorySourceText(sourceType: InventorySourceType) {
-  return sourceType === 'owned' ? '我的商品' : '平台库'
+function inventoryOptionStatusText(option: MerchantInventoryOption) {
+  return option.source_type === 'owned' && option.available === false ? '暂停' : ''
 }
 
-function inventoryOptionStatusText(option: MerchantInventoryOption) {
-  if (option.source_type === 'owned') {
-    return option.available === false ? '已暂停' : '接单中'
-  }
-  return option.has_active_application ? '已申请' : '待申请'
+function inventoryOptionActionText(option: MerchantInventoryOption) {
+  const product = option.product.trim() || '机器'
+  return inventorySelectedRuleIds.value.has(option.rule_id) ? `编辑 ${product} 数量` : `选择 ${product}`
+}
+
+function shouldShowInventoryOptionStatus(option: MerchantInventoryOption) {
+  return option.source_type === 'owned' && option.available === false
 }
 
 function addInventoryOption(option: MerchantInventoryOption) {
-  if (inventorySelectedRuleIds.value.has(option.rule_id)) {
+  const existingRow = inventoryRows.value.find((row) => row.rule_id === option.rule_id)
+  if (existingRow) {
+    focusInventoryQuantityInput(existingRow.key)
     return
   }
+  const rowKey = inventoryOptionKey(option)
   inventoryRows.value.push({
-    key: inventoryOptionKey(option),
+    key: rowKey,
     source_type: option.source_type,
     rule_id: option.rule_id,
     product: option.product,
-    quantity: '',
+    quantity: String(inventoryOptionLatestQuantity(option) ?? ''),
     latestQuantity: inventoryOptionLatestQuantity(option),
     has_active_application: option.has_active_application,
   })
   inventoryNotice.value = ''
   inventoryError.value = ''
+  inventorySearch.value = ''
+  focusInventoryQuantityInput(rowKey)
 }
 
 function removeInventoryRow(key: string) {
   inventoryRows.value = inventoryRows.value.filter((row) => row.key !== key)
 }
 
+function updateInventoryRowQuantity(rowKey: string, event: Event) {
+  const input = event.target instanceof HTMLInputElement ? event.target : null
+  if (!input) return
+
+  const row = inventoryRows.value.find((item) => item.key === rowKey)
+  if (row) {
+    row.quantity = input.value
+  }
+}
+
+function isInventoryRowQuantityInvalid(row: InventoryDraftRow) {
+  return row.quantity.trim().length > 0 && !hasValidInventorySnapshotQuantities([row])
+}
+
+function handleInventoryQuantityEnter(rowKey: string) {
+  const rowIndex = inventoryRows.value.findIndex((item) => item.key === rowKey)
+  if (rowIndex === -1) return
+
+  const currentRow = inventoryRows.value[rowIndex]
+  if (!hasValidInventorySnapshotQuantities([currentRow])) return
+
+  const nextRow = inventoryRows.value[rowIndex + 1]
+  if (nextRow) {
+    focusInventoryQuantityInput(nextRow.key)
+    return
+  }
+
+  const incompleteRow = inventoryRows.value.find((item) => !hasValidInventorySnapshotQuantities([item]))
+  if (incompleteRow) {
+    focusInventoryQuantityInput(incompleteRow.key)
+    return
+  }
+
+  if (inventoryCanSubmit.value && !inventorySubmitting.value) {
+    void submitInventorySnapshot()
+  }
+}
+
+function focusInventoryQuantityInput(rowKey: string) {
+  void nextTick(() => {
+    const input = Array.from(document.querySelectorAll<HTMLInputElement>('input[data-inventory-row-key]'))
+      .find((element) => element.dataset.inventoryRowKey === rowKey)
+    input?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    input?.focus()
+    input?.select()
+  })
+}
+
 async function submitInventorySnapshot() {
+  if (inventorySubmitting.value) {
+    return
+  }
+
   inventoryNotice.value = ''
   inventoryError.value = ''
   if (inventoryRows.value.length === 0) {
-    inventoryError.value = '请先加入机器'
+    inventoryError.value = '请先选机器'
     return
   }
 
   const { items, error } = buildInventorySnapshotPayload(inventoryRows.value)
   if (error) {
     inventoryError.value = error
+    return
+  }
+
+  if (previewMode) {
+    const submittedAt = new Date().toISOString()
+    latestInventoryItems.value = items.map((item) => {
+      const row = inventoryRows.value.find((draft) => draft.rule_id === item.rule_id)
+      return {
+        merchant_id: PREVIEW_MERCHANT_SESSION.merchantId || 'preview-merchant',
+        merchant_name: PREVIEW_MERCHANT_SESSION.merchantName,
+        rule_id: item.rule_id,
+        product: row?.product || item.rule_id,
+        source_type: item.source_type,
+        quantity: item.quantity,
+        product_application_id: item.source_type === 'catalog' ? 'preview-application' : null,
+        submitted_at: submittedAt,
+      }
+    })
+    for (const option of [...inventoryOptions.owned, ...inventoryOptions.catalog]) {
+      const submitted = items.find((item) => item.rule_id === option.rule_id)
+      if (submitted) {
+        option.latest_quantity = submitted.quantity
+      }
+    }
+    inventoryNotice.value = `预览已提交 ${items.length} 台机器库存`
+    inventoryRows.value = []
     return
   }
 
@@ -881,6 +1086,16 @@ async function submitInventorySnapshot() {
 }
 
 async function refreshNotifications() {
+  if (previewMode) {
+    notifications.value = PREVIEW_NOTIFICATIONS_RESPONSE.items.map((item) => ({ ...item }))
+    dispatchTrend.value = PREVIEW_NOTIFICATIONS_RESPONSE.chart.map((item) => ({ ...item }))
+    notificationsSummary.today_count = PREVIEW_NOTIFICATIONS_RESPONSE.today_count
+    notificationsSummary.unread_count = PREVIEW_NOTIFICATIONS_RESPONSE.unread_count
+    knownNotificationIds.value = new Set(notifications.value.map((item) => item.id))
+    notificationsLoaded.value = true
+    return
+  }
+
   try {
     const result = await api.listNotifications()
     const nextItems = result.items
@@ -939,16 +1154,35 @@ function goToNotifications() {
   newDispatchBurstCount.value = 0
 }
 
-function goToFeedback(mode: FeedbackCenterMode = 'product_application') {
+function openInventoryFeedback(mode: FeedbackCenterMode = 'product_application') {
   feedbackCenterMode.value = mode
+  feedbackPanelExpanded.value = true
   feedbackNotice.value = ''
   feedbackError.value = ''
-  navActive.value = 'feedback'
+  navActive.value = 'machineInventory'
+  scrollInventoryFeedbackIntoView()
   void refreshFeedbackCenter()
+}
+
+function scrollInventoryFeedbackIntoView() {
+  void nextTick(() => {
+    const panel = document.querySelector<HTMLElement>('.inventory-feedback-section')
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+function closeInventoryFeedback() {
+  feedbackPanelExpanded.value = false
+  resetFeedbackPanelState()
+}
+
+function goToFeedback(mode: FeedbackCenterMode = 'product_application') {
+  openInventoryFeedback(mode)
 }
 
 function goToPriceFeedback(product: MerchantProduct) {
   feedbackCenterMode.value = 'feedback'
+  feedbackPanelExpanded.value = true
   feedbackMode.value = 'price_suggestion'
   priceFeedbackForm.product = product.product
   priceFeedbackForm.ruleId = product.rule_id
@@ -957,7 +1191,8 @@ function goToPriceFeedback(product: MerchantProduct) {
   priceFeedbackForm.reason = ''
   feedbackNotice.value = ''
   feedbackError.value = ''
-  navActive.value = 'feedback'
+  navActive.value = 'machineInventory'
+  scrollInventoryFeedbackIntoView()
   void refreshFeedbackCenter()
 }
 
@@ -985,12 +1220,6 @@ function applyProductApplicationSearch() {
   openProductApplicationPicker()
 }
 
-function clearProductApplicationSearch() {
-  productApplicationSearchInput.value = ''
-  productApplicationSearchQuery.value = ''
-  openProductApplicationPicker()
-}
-
 function openProductApplicationPicker(options: { blurActiveInput?: boolean } = {}) {
   clearProductApplicationPickerCloseTimer()
   productApplicationPickerOpen.value = true
@@ -1011,14 +1240,6 @@ function closeProductApplicationPickerSoon() {
     productApplicationPickerOpen.value = false
     productApplicationPickerCloseTimer = null
   }, 120)
-}
-
-function toggleProductApplicationPicker() {
-  if (productApplicationPickerOpen.value) {
-    closeProductApplicationPicker()
-    return
-  }
-  openProductApplicationPicker()
 }
 
 function handleProductApplicationSearchInput() {
@@ -1051,6 +1272,16 @@ function chooseNewProductApplicationFromSearch() {
   feedbackError.value = ''
 }
 
+function openInventoryProductApplicationFromSearch() {
+  const product = inventorySearchDraftName.value
+  if (!product) return
+
+  productApplicationSearchInput.value = product
+  productApplicationSearchQuery.value = product
+  openInventoryFeedback('product_application')
+  chooseNewProductApplicationFromSearch()
+}
+
 function toggleSubmissionRecords() {
   submissionRecordsExpanded.value = !submissionRecordsExpanded.value
 }
@@ -1060,10 +1291,17 @@ function syncPriceFeedbackRuleId() {
   priceFeedbackForm.ruleId = selected?.rule_id || ''
 }
 
-function openPriceProductPicker() {
+function openPriceProductPicker(options: { blurActiveInput?: boolean } = {}) {
   clearPriceProductPickerCloseTimer()
   priceProductPickerOpen.value = true
-  void nextTick(blurActivePickerInputOnMobile)
+  if (options.blurActiveInput !== false) {
+    void nextTick(blurActivePickerInputOnMobile)
+  }
+}
+
+function openPriceProductPickerFromFocus() {
+  if (mobilePickerMode.value) return
+  openPriceProductPicker()
 }
 
 function closePriceProductPicker() {
@@ -1080,29 +1318,15 @@ function closePriceProductPickerSoon() {
   }, 120)
 }
 
-function togglePriceProductPicker() {
-  if (priceProductPickerOpen.value) {
-    closePriceProductPicker()
-    return
-  }
-  openPriceProductPicker()
-}
-
 function handlePriceProductInput() {
   syncPriceFeedbackRuleId()
-  openPriceProductPicker()
+  openPriceProductPicker({ blurActiveInput: false })
 }
 
 function selectFeedbackProduct(product: MerchantProduct) {
   priceFeedbackForm.product = product.product
   priceFeedbackForm.ruleId = product.rule_id
   closePriceProductPicker()
-}
-
-function clearFeedbackProduct() {
-  priceFeedbackForm.product = ''
-  priceFeedbackForm.ruleId = ''
-  openPriceProductPicker()
 }
 
 function selectPriceIssueFeedback(value: MerchantPriceIssueType) {
@@ -1144,6 +1368,15 @@ function prependProductApplicationRecord(record: MerchantProductApplicationRecor
 }
 
 async function refreshFeedbackCenter() {
+  if (previewMode) {
+    feedbackLoading.value = false
+    productApplicationOptionsLoading.value = false
+    if (feedbackCenterMode.value === 'product_application') {
+      await refreshProductApplicationOptions()
+    }
+    return
+  }
+
   const tasks = [refreshSubmissionRecords()]
   if (feedbackCenterMode.value === 'product_application') {
     tasks.push(refreshProductApplicationOptions())
@@ -1156,6 +1389,14 @@ async function refreshFeedbackRecords() {
 }
 
 async function refreshSubmissionRecords() {
+  if (previewMode) {
+    feedbackError.value = ''
+    feedbackRecords.value = sortFeedbackRecords(feedbackRecords.value)
+    productApplicationRecords.value = sortProductApplicationRecords(productApplicationRecords.value)
+    feedbackLoading.value = false
+    return
+  }
+
   if (!isLoggedIn.value) return
   feedbackLoading.value = true
   feedbackError.value = ''
@@ -1186,6 +1427,19 @@ async function refreshSubmissionRecords() {
 }
 
 async function refreshProductApplicationOptions() {
+  if (previewMode) {
+    productApplicationOptions.value = PREVIEW_INVENTORY_OPTIONS.catalog.map((option) => ({
+      product_id: `preview-product-${option.rule_id}`,
+      rule_id: option.rule_id,
+      product: option.product,
+      keywords: [...(option.keywords || [])],
+      category: option.category || null,
+    }))
+    syncSelectedProductApplicationOption()
+    productApplicationOptionsLoading.value = false
+    return
+  }
+
   if (!isLoggedIn.value) return
   productApplicationOptionsLoading.value = true
   try {
@@ -1234,11 +1488,18 @@ async function submitExistingProductApplication() {
     feedbackError.value = '请填写申请说明'
     return
   }
-  productApplicationSubmitting.value = true
+  const payload = {
+    application_type: 'existing_product' as const,
+    product_id: option.product_id,
+    rule_id: option.rule_id || option.product_id,
+    product: option.product,
+    reason,
+    contact: accountLabel.value,
+  }
   feedbackNotice.value = ''
   feedbackError.value = ''
-  try {
-    const record = await api.submitProductApplication({
+  if (previewMode) {
+    const record = createPreviewProductApplicationRecord({
       application_type: 'existing_product',
       product_id: option.product_id,
       rule_id: option.rule_id || option.product_id,
@@ -1246,6 +1507,17 @@ async function submitExistingProductApplication() {
       reason,
       contact: accountLabel.value,
     })
+    prependProductApplicationRecord(record)
+    existingProductApplicationForm.productId = ''
+    existingProductApplicationForm.reason = ''
+    productApplicationSearchInput.value = ''
+    productApplicationSearchQuery.value = ''
+    feedbackNotice.value = '预览已记录商品申请'
+    return
+  }
+  productApplicationSubmitting.value = true
+  try {
+    const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
     existingProductApplicationForm.productId = ''
     existingProductApplicationForm.reason = ''
@@ -1270,17 +1542,35 @@ async function submitNewProductApplication() {
     feedbackError.value = '请填写申请说明'
     return
   }
-  productApplicationSubmitting.value = true
+  const payload = {
+    application_type: 'new_product' as const,
+    product,
+    model_note: newProductApplicationForm.modelNote.trim() || null,
+    reason,
+    contact: accountLabel.value,
+  }
   feedbackNotice.value = ''
   feedbackError.value = ''
-  try {
-    const record = await api.submitProductApplication({
+  if (previewMode) {
+    const record = createPreviewProductApplicationRecord({
       application_type: 'new_product',
       product,
       model_note: newProductApplicationForm.modelNote.trim() || null,
       reason,
       contact: accountLabel.value,
     })
+    prependProductApplicationRecord(record)
+    newProductApplicationForm.product = ''
+    newProductApplicationForm.modelNote = ''
+    newProductApplicationForm.reason = ''
+    productApplicationSearchInput.value = ''
+    productApplicationSearchQuery.value = ''
+    feedbackNotice.value = '预览已记录新增商品申请'
+    return
+  }
+  productApplicationSubmitting.value = true
+  try {
+    const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
     newProductApplicationForm.product = ''
     newProductApplicationForm.modelNote = ''
@@ -1301,16 +1591,29 @@ async function submitIssueFeedback() {
     feedbackError.value = '请先填写问题描述'
     return
   }
-  feedbackSubmitting.value = true
+  const payload = {
+    type: 'issue' as const,
+    issue_type: issueFeedbackForm.issueType,
+    description,
+    contact: accountLabel.value,
+  }
   feedbackNotice.value = ''
   feedbackError.value = ''
-  try {
-    const record = await api.submitFeedback({
+  if (previewMode) {
+    const record = createPreviewFeedbackRecord({
       type: 'issue',
       issue_type: issueFeedbackForm.issueType,
       description,
       contact: accountLabel.value,
     })
+    prependFeedbackRecord(record)
+    issueFeedbackForm.description = ''
+    feedbackNotice.value = '预览已记录问题反馈'
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    const record = await api.submitFeedback(payload)
     prependFeedbackRecord(record)
     issueFeedbackForm.description = ''
     feedbackNotice.value = '问题反馈已提交'
@@ -1338,11 +1641,19 @@ async function submitPriceFeedback() {
     feedbackError.value = '请填写原因说明'
     return
   }
-  feedbackSubmitting.value = true
+  const payload = {
+    type: 'price_suggestion' as const,
+    product,
+    rule_id: priceFeedbackForm.ruleId || null,
+    price_issue_type: priceFeedbackForm.priceIssueType,
+    price_per_day: priceFeedbackRequiresPrice.value ? pricePerDay : null,
+    reason: reason || null,
+    contact: accountLabel.value,
+  }
   feedbackNotice.value = ''
   feedbackError.value = ''
-  try {
-    const record = await api.submitFeedback({
+  if (previewMode) {
+    const record = createPreviewFeedbackRecord({
       type: 'price_suggestion',
       product,
       rule_id: priceFeedbackForm.ruleId || null,
@@ -1351,6 +1662,15 @@ async function submitPriceFeedback() {
       reason: reason || null,
       contact: accountLabel.value,
     })
+    prependFeedbackRecord(record)
+    priceFeedbackForm.pricePerDay = ''
+    priceFeedbackForm.reason = ''
+    feedbackNotice.value = '预览已记录价格反馈'
+    return
+  }
+  feedbackSubmitting.value = true
+  try {
+    const record = await api.submitFeedback(payload)
     prependFeedbackRecord(record)
     priceFeedbackForm.pricePerDay = ''
     priceFeedbackForm.reason = ''
@@ -1687,6 +2007,25 @@ async function confirmBulkAvailability() {
 
   startBulkAvailabilityProgress(ruleIds.length)
   try {
+    if (previewMode) {
+      const ruleIdSet = new Set(ruleIds)
+      const updatedAt = new Date().toISOString()
+      products.value = products.value.map((product) => (
+        ruleIdSet.has(product.rule_id)
+          ? {
+            ...product,
+            available,
+            resume_at: available ? null : pauseResumeAt,
+            updated_at: updatedAt,
+          }
+          : product
+      ))
+      bulkAvailabilityProgress.current = ruleIds.length
+      bulkAvailabilityDialog.open = false
+      expandingProduct.value = null
+      return
+    }
+
     const result = await api.bulkUpdateAvailability(ruleIds, available, { resumeAt: pauseResumeAt })
     replaceProducts(result.items)
     bulkAvailabilityProgress.current = result.success_count + result.failed_count
@@ -1704,6 +2043,20 @@ async function confirmBulkAvailability() {
 }
 
 async function setAvailable(ruleId: string) {
+  if (previewMode) {
+    const idx = products.value.findIndex((p) => p.rule_id === ruleId)
+    if (idx !== -1) {
+      products.value[idx] = {
+        ...products.value[idx],
+        available: true,
+        resume_at: null,
+        updated_at: new Date().toISOString(),
+      }
+    }
+    expandingProduct.value = null
+    return
+  }
+
   submittingProduct.value = ruleId
   try {
     const updated = await api.updateAvailability(ruleId, true)
@@ -1722,6 +2075,20 @@ async function setUnavailable(ruleId: string) {
   }
 
   error.value = ''
+  if (previewMode) {
+    const idx = products.value.findIndex((p) => p.rule_id === ruleId)
+    if (idx !== -1) {
+      products.value[idx] = {
+        ...products.value[idx],
+        available: false,
+        resume_at: pauseResumeAt,
+        updated_at: new Date().toISOString(),
+      }
+    }
+    expandingProduct.value = null
+    return
+  }
+
   submittingProduct.value = ruleId
   try {
     const updated = await api.updateAvailability(ruleId, false, { resumeAt: pauseResumeAt })
@@ -1762,10 +2129,10 @@ function logout(reason: LogoutReason = 'manual') {
   latestInventoryItems.value = []
   inventoryRows.value = []
   inventorySearch.value = ''
-  inventorySourceMode.value = 'owned'
   inventoryLoaded.value = false
   inventoryNotice.value = ''
   inventoryError.value = ''
+  resetFeedbackPanelState({ clearDrafts: true })
   notificationsSummary.today_count = 0
   notificationsSummary.unread_count = 0
   knownNotificationIds.value = new Set()
@@ -1963,10 +2330,6 @@ async function run(task: () => Promise<void>) {
           <span v-if="navUnreadCount > 0" class="nav-badge">
             {{ navUnreadCount > 99 ? '99+' : navUnreadCount }}
           </span>
-        </button>
-        <button :class="{ active: navActive === 'feedback' }" @click="goToFeedback()">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
-          反馈
         </button>
       </nav>
       <div class="sidebar-user" v-if="isLoggedIn">
@@ -2434,9 +2797,7 @@ async function run(task: () => Promise<void>) {
         <!-- Machine Inventory -->
         <template v-if="navActive === 'machineInventory'">
           <div class="inventory-page">
-            <div class="inventory-page-header">
-              <h1>机器库存</h1>
-            </div>
+            <h1 class="sr-only">机器库存</h1>
 
             <p v-if="inventoryNotice" class="inventory-notice">{{ inventoryNotice }}</p>
             <p v-if="inventoryError" class="inventory-error">{{ inventoryError }}</p>
@@ -2444,88 +2805,73 @@ async function run(task: () => Promise<void>) {
             <div class="inventory-layout">
               <section class="inventory-picker-card">
                 <div class="inventory-picker-toolbar">
-                  <strong>选择机器</strong>
                   <input v-model="inventorySearch" placeholder="搜索机器" />
-                  <div class="inventory-source-tabs" role="tablist" aria-label="机器来源">
-                    <button
-                      type="button"
-                      :class="{ active: inventorySourceMode === 'owned' }"
-                      @click="inventorySourceMode = 'owned'"
-                    >
-                      我的商品
-                    </button>
-                    <button
-                      type="button"
-                      :class="{ active: inventorySourceMode === 'catalog' }"
-                      @click="inventorySourceMode = 'catalog'"
-                    >
-                      平台机器库
-                    </button>
-                  </div>
                 </div>
 
                 <div v-if="inventoryLoading" class="notif-empty">加载中...</div>
                 <div v-else class="inventory-option-list">
-                  <button
-                    v-for="option in filteredInventoryOptions"
-                    :key="inventoryOptionKey(option)"
-                    type="button"
+                  <div
+                    v-for="item in filteredInventoryOptionRows"
+                    :key="inventoryOptionKey(item.option)"
                     class="inventory-option-row"
-                    :class="{ selected: inventorySelectedRuleIds.has(option.rule_id) }"
-                    :disabled="inventorySelectedRuleIds.has(option.rule_id)"
-                    @click="addInventoryOption(option)"
+                    :class="{ selected: Boolean(item.row), invalid: item.row ? isInventoryRowQuantityInvalid(item.row) : false }"
                   >
-                    <span class="inventory-option-main">
-                      <strong>{{ option.product }}</strong>
-                      <small v-if="inventoryOptionLatestQuantity(option) !== null">
-                        上次 {{ inventoryOptionLatestQuantity(option) }} 台
+                    <button
+                      type="button"
+                      class="inventory-option-main inventory-option-select"
+                      :aria-label="inventoryOptionActionText(item.option)"
+                      :title="inventoryOptionActionText(item.option)"
+                      @click="addInventoryOption(item.option)"
+                    >
+                      <strong>{{ item.option.product }}</strong>
+                      <small v-if="!item.row && inventoryOptionLatestQuantity(item.option) !== null">
+                        {{ inventoryOptionLatestQuantity(item.option) }} 台
                       </small>
+                    </button>
+                    <span v-if="shouldShowInventoryOptionStatus(item.option)" class="inventory-option-tags">
+                      <em class="inventory-chip muted">{{ inventoryOptionStatusText(item.option) }}</em>
                     </span>
-                    <span class="inventory-option-tags">
-                      <em class="inventory-chip">{{ inventorySourceText(option.source_type) }}</em>
-                      <em class="inventory-chip muted">{{ inventoryOptionStatusText(option) }}</em>
-                    </span>
-                    <span class="inventory-add-text">
-                      {{ inventorySelectedRuleIds.has(option.rule_id) ? '已加入' : '加入' }}
-                    </span>
-                  </button>
-                  <div v-if="filteredInventoryOptions.length === 0" class="inventory-empty">暂无机器</div>
-                </div>
-              </section>
-
-              <section class="inventory-list-card">
-                <div class="inventory-list-header">
-                  <h2>上报清单</h2>
-                  <span>{{ inventoryRows.length }} 台</span>
-                </div>
-
-                <div v-if="inventoryRows.length === 0" class="inventory-empty">从左侧加入机器</div>
-                <div v-else class="inventory-draft-list">
-                  <div v-for="row in inventoryRows" :key="row.key" class="inventory-draft-row">
-                    <div class="inventory-draft-main">
-                      <strong>{{ row.product }}</strong>
-                      <span>
-                        {{ inventorySourceText(row.source_type) }}
-                        <template v-if="row.latestQuantity !== null"> · 上次 {{ row.latestQuantity }} 台</template>
-                      </span>
-                    </div>
-                    <label class="inventory-quantity-field">
-                      <span>库存数量</span>
+                    <template v-if="item.row">
+                      <label class="inventory-quantity-field inventory-inline-quantity">
                       <input
-                        v-model="row.quantity"
+                        :value="item.row.quantity"
+                        :data-inventory-row-key="item.row.key"
+                        :aria-label="`${item.row.product} 库存数量`"
+                        type="number"
                         inputmode="numeric"
                         min="0"
                         step="1"
-                        placeholder="0"
+                        :aria-invalid="isInventoryRowQuantityInvalid(item.row) ? 'true' : 'false'"
+                        @input="updateInventoryRowQuantity(item.row.key, $event)"
+                        @keydown.enter.prevent="handleInventoryQuantityEnter(item.row.key)"
                       />
-                    </label>
-                    <button type="button" class="btn btn-ghost" @click="removeInventoryRow(row.key)">移除</button>
+                      </label>
+                      <button
+                        type="button"
+                        class="btn btn-ghost inventory-remove-row"
+                        aria-label="移除"
+                        @click="removeInventoryRow(item.row.key)"
+                      >
+                        &times;
+                      </button>
+                    </template>
+                  </div>
+                  <div v-if="inventoryShouldShowEmptyState" class="inventory-empty">
+                    <span>{{ inventorySearchHasNoMatches ? '没有找到机器' : '暂无机器' }}</span>
+                    <button
+                      v-if="inventorySearchHasNoMatches"
+                      type="button"
+                      class="inventory-empty-apply"
+                      @click="openInventoryProductApplicationFromSearch"
+                    >
+                      申请新增
+                    </button>
                   </div>
                 </div>
 
-                <div class="inventory-submit-footer">
+                <div v-if="inventoryRows.length > 0" class="inventory-submit-footer">
                   <button class="btn btn-primary" :disabled="inventorySubmitDisabled" @click="submitInventorySnapshot">
-                    {{ inventorySubmitting ? '提交中...' : '提交库存快照' }}
+                    {{ inventorySubmitting ? '提交中' : '提交' }}
                   </button>
                 </div>
               </section>
@@ -2583,11 +2929,23 @@ async function run(task: () => Promise<void>) {
           </div>
         </div>
 
-        <!-- Feedback -->
-        <template v-if="navActive === 'feedback'">
-          <div class="welcome">
-            <h1>反馈中心</h1>
-            <p>提交商品申请、问题反馈和价格建议，处理进度统一在下方查看。</p>
+        <!-- Embedded Feedback -->
+        <section
+          v-if="navActive === 'machineInventory' && feedbackPanelExpanded"
+          class="inventory-feedback-section"
+        >
+          <div class="inventory-feedback-strip">
+            <div class="inventory-feedback-actions">
+              <button
+                type="button"
+                class="btn btn-ghost inventory-feedback-close"
+                aria-label="收起申请/反馈"
+                title="收起申请/反馈"
+                @click="closeInventoryFeedback"
+              >
+                &times;
+              </button>
+            </div>
           </div>
 
           <div class="feedback-tabs" role="tablist" aria-label="申请与反馈类型">
@@ -2610,13 +2968,10 @@ async function run(task: () => Promise<void>) {
             </button>
           </div>
 
-          <p v-if="feedbackNotice" class="feedback-notice">{{ feedbackNotice }}</p>
-          <p v-if="feedbackError" class="feedback-error">{{ feedbackError }}</p>
+            <p v-if="feedbackNotice" class="feedback-notice">{{ feedbackNotice }}</p>
+            <p v-if="feedbackError" class="feedback-error">{{ feedbackError }}</p>
 
           <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
-            <div class="feedback-form-header">
-              <h2>商品申请</h2>
-            </div>
             <div class="field">
               <label>申请商品</label>
               <div class="product-application-picker">
@@ -2631,27 +2986,14 @@ async function run(task: () => Promise<void>) {
                       aria-controls="product-application-listbox"
                       :aria-expanded="productApplicationPickerOpen"
                       :readonly="mobilePickerMode"
+                      @pointerdown="openProductApplicationPicker()"
+                      @mousedown.prevent="openProductApplicationPicker()"
                       @focus="openProductApplicationPicker()"
+                      @click="openProductApplicationPicker()"
                       @blur="closeProductApplicationPickerSoon"
                       @input="handleProductApplicationSearchInput"
                       @keyup.enter="applyProductApplicationSearch"
                     />
-                    <button type="button" class="btn btn-ghost" @click="applyProductApplicationSearch">搜索</button>
-                    <button
-                      type="button"
-                      class="btn btn-ghost product-application-toggle"
-                      @mousedown.prevent="toggleProductApplicationPicker"
-                    >
-                      {{ productApplicationPickerOpen ? '收起' : '选择' }}
-                    </button>
-                    <button
-                      v-if="productApplicationSearchQuery"
-                      type="button"
-                      class="btn btn-ghost product-application-clear"
-                      @mousedown.prevent="clearProductApplicationSearch"
-                    >
-                      清空
-                    </button>
                   </div>
                   <div
                     v-if="productApplicationPickerOpen"
@@ -2666,10 +3008,9 @@ async function run(task: () => Promise<void>) {
                       role="option"
                       :aria-selected="existingProductApplicationForm.productId === option.product_id"
                       :class="['product-application-option', { active: existingProductApplicationForm.productId === option.product_id }]"
-                      @mousedown.prevent="selectProductApplicationOption(option.product_id)"
+                      @click="selectProductApplicationOption(option.product_id)"
                     >
                       <strong>{{ option.product }}</strong>
-                      <span>选择</span>
                     </button>
                     <div v-if="filteredProductApplicationOptions.length === 0" class="product-application-empty">
                       <strong>没有找到「{{ productApplicationDraftName || '该商品' }}」</strong>
@@ -2677,11 +3018,11 @@ async function run(task: () => Promise<void>) {
                         v-if="productApplicationDraftName"
                         type="button"
                         class="product-application-create"
-                        @mousedown.prevent="chooseNewProductApplicationFromSearch"
+                        @click="chooseNewProductApplicationFromSearch"
                       >
                         申请新增商品「{{ productApplicationDraftName }}」
                       </button>
-                      <span v-else>暂时没有可直接申请的商品，你可以输入商品名称后申请新增商品。</span>
+                      <span v-else>输入名称后申请新增</span>
                     </div>
                   </div>
                   <div
@@ -2692,7 +3033,7 @@ async function run(task: () => Promise<void>) {
                   <div v-if="productApplicationPickerOpen" class="product-application-mobile-sheet" role="dialog" aria-label="选择可申请商品">
                     <div class="product-application-mobile-header">
                       <strong>选择或新增商品</strong>
-                      <button type="button" @click="closeProductApplicationPicker">关闭</button>
+                      <button type="button" aria-label="关闭" @click="closeProductApplicationPicker">&times;</button>
                     </div>
                     <div class="product-application-mobile-search">
                       <input
@@ -2712,7 +3053,6 @@ async function run(task: () => Promise<void>) {
                         @click="selectProductApplicationOption(option.product_id)"
                       >
                         <strong>{{ option.product }}</strong>
-                        <span>选择</span>
                       </button>
                       <div v-if="filteredProductApplicationOptions.length === 0" class="product-application-empty">
                         <strong>没有找到「{{ productApplicationDraftName || '该商品' }}」</strong>
@@ -2724,17 +3064,24 @@ async function run(task: () => Promise<void>) {
                         >
                           申请新增商品「{{ productApplicationDraftName }}」
                         </button>
-                        <span v-else>暂时没有可直接申请的商品，你可以输入商品名称后申请新增商品。</span>
+                        <span v-else>输入名称后申请新增</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div v-if="productApplicationSelectedName" class="product-application-selected">
+                <div
+                  v-if="productApplicationSelectedName"
+                  class="product-application-selected"
+                  role="button"
+                  tabindex="0"
+                  @click="openProductApplicationPicker()"
+                  @keydown.enter.prevent="openProductApplicationPicker()"
+                  @keydown.space.prevent="openProductApplicationPicker()"
+                >
                   <span>
                     <small>{{ productApplicationIsNew ? '已选择新增商品' : '已选择商品' }}</small>
                     <strong>{{ productApplicationSelectedName }}</strong>
                   </span>
-                  <button type="button" @click="openProductApplicationPicker()">更换</button>
                 </div>
               </div>
             </div>
@@ -2752,10 +3099,6 @@ async function run(task: () => Promise<void>) {
           </div>
 
           <div class="feedback-form-card" v-if="feedbackCenterMode === 'feedback'">
-            <div class="feedback-form-header">
-              <h2>问题 / 价格反馈</h2>
-              <p>用于反馈页面异常、派单异常、接单状态异常、登录账号问题，也可以反馈机器推荐价格或型号问题。</p>
-            </div>
             <div class="field">
               <label>反馈类型</label>
               <div class="feedback-choice-group" role="radiogroup" aria-label="反馈类型">
@@ -2811,7 +3154,10 @@ async function run(task: () => Promise<void>) {
               <div class="field">
                 <label>商品</label>
                 <div class="feedback-product-picker" :class="{ open: priceProductPickerOpen }">
-                  <div class="feedback-product-input-wrap">
+                  <div
+                    class="feedback-product-input-wrap"
+                    @click="openPriceProductPicker()"
+                  >
                     <input
                       v-model="priceFeedbackForm.product"
                       placeholder="请选择或输入商品"
@@ -2820,28 +3166,12 @@ async function run(task: () => Promise<void>) {
                       aria-controls="feedback-product-listbox"
                       :aria-expanded="priceProductPickerOpen"
                       :readonly="mobilePickerMode"
-                      @focus="openPriceProductPicker"
+                      @focus="openPriceProductPickerFromFocus"
+                      @click="openPriceProductPicker()"
                       @blur="closePriceProductPickerSoon"
                       @input="handlePriceProductInput"
                       @change="syncPriceFeedbackRuleId"
                     />
-                    <div class="feedback-product-actions">
-                      <button
-                        v-if="priceFeedbackForm.product"
-                        type="button"
-                        class="feedback-product-clear"
-                        @mousedown.prevent="clearFeedbackProduct"
-                      >
-                        清除
-                      </button>
-                      <button
-                        type="button"
-                        class="feedback-product-toggle"
-                        @mousedown.prevent="togglePriceProductPicker"
-                      >
-                        {{ priceProductPickerOpen ? '收起' : '选择' }}
-                      </button>
-                    </div>
                   </div>
                   <div
                     v-if="priceProductPickerOpen"
@@ -2860,7 +3190,6 @@ async function run(task: () => Promise<void>) {
                     >
                       <span>
                         <strong>{{ product.product }}</strong>
-                        <small>点选后自动带入商品</small>
                       </span>
                       <em v-if="priceFeedbackForm.product === product.product">已选</em>
                     </button>
@@ -2876,7 +3205,16 @@ async function run(task: () => Promise<void>) {
                   <div v-if="priceProductPickerOpen" class="feedback-product-mobile-sheet" role="dialog" aria-label="选择商品">
                     <div class="feedback-product-mobile-header">
                       <strong>选择商品</strong>
-                      <button type="button" @click="closePriceProductPicker">关闭</button>
+                      <button type="button" aria-label="关闭" @click="closePriceProductPicker">&times;</button>
+                    </div>
+                    <div class="feedback-product-mobile-search">
+                      <input
+                        v-model="priceFeedbackForm.product"
+                        placeholder="搜索或输入商品"
+                        autocomplete="off"
+                        @input="handlePriceProductInput"
+                        @change="syncPriceFeedbackRuleId"
+                      />
                     </div>
                     <div class="feedback-product-mobile-list">
                       <button
@@ -2888,7 +3226,6 @@ async function run(task: () => Promise<void>) {
                       >
                         <span>
                           <strong>{{ product.product }}</strong>
-                          <small>点选后自动带入商品</small>
                         </span>
                         <em v-if="priceFeedbackForm.product === product.product">已选</em>
                       </button>
@@ -2932,37 +3269,39 @@ async function run(task: () => Promise<void>) {
             </template>
           </div>
 
-          <div class="feedback-record-panel">
-            <div class="feedback-record-header">
-              <div>
-                <h2>我的提交记录</h2>
-              </div>
-              <div class="feedback-record-actions">
+            <div
+              v-if="feedbackLoading || submissionRecords.length > 0"
+              class="feedback-record-panel"
+              :class="{ 'is-compact': !submissionRecordsExpanded }"
+            >
+              <div class="feedback-record-header">
                 <button
-                  v-if="hasHiddenSubmissionRecords"
                   type="button"
-                  class="btn btn-ghost feedback-record-toggle"
+                  class="feedback-record-summary"
+                  :disabled="!hasHiddenSubmissionRecords"
+                  :aria-expanded="submissionRecordsExpanded"
                   @click="toggleSubmissionRecords"
                 >
-                  {{ submissionRecordsExpanded ? '收起' : `查看全部 ${submissionRecords.length} 条` }}
+                  <span>提交记录</span>
+                  <em>{{ feedbackLoading ? '加载中' : `${submissionRecords.length} 条 · ${submissionRecordsExpanded ? '收起' : '展开'}` }}</em>
                 </button>
-                <button class="btn btn-ghost" :disabled="feedbackLoading" @click="refreshSubmissionRecords">刷新</button>
               </div>
-            </div>
-            <div v-if="feedbackLoading" class="notif-empty">提交记录加载中...</div>
-            <div v-else-if="submissionRecords.length === 0" class="notif-empty">暂无提交记录。</div>
-            <div v-else class="feedback-record-list">
-              <div v-for="record in visibleSubmissionRecords" :key="record.id" class="feedback-record-item">
-                <div>
-                  <strong>{{ record.typeText }} · {{ record.title }}</strong>
-                  <span>{{ record.summary }}</span>
-                  <small>{{ formatDispatchTime(record.createdAt) }}</small>
+              <template v-if="submissionRecordsExpanded">
+                <div v-if="feedbackLoading" class="notif-empty">提交记录加载中...</div>
+                <div v-else-if="submissionRecords.length === 0" class="notif-empty">暂无提交记录。</div>
+                <div v-else class="feedback-record-list">
+                  <div v-for="record in visibleSubmissionRecords" :key="record.id" class="feedback-record-item">
+                    <div>
+                      <strong>{{ record.typeText }} · {{ record.title }}</strong>
+                      <span>{{ record.summary }}</span>
+                      <small>{{ formatDispatchTime(record.createdAt) }}</small>
+                    </div>
+                    <em :class="`feedback-status ${record.status}`">{{ record.statusText }}</em>
+                  </div>
                 </div>
-                <em :class="`feedback-status ${record.status}`">{{ record.statusText }}</em>
-              </div>
+              </template>
             </div>
-          </div>
-        </template>
+        </section>
 
         <!-- Notifications -->
         <template v-if="navActive === 'notifications'">
