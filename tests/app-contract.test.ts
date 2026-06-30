@@ -811,6 +811,8 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.doesNotMatch(inventorySearchApplyRule, /font-weight:\s*800/)
   assert.doesNotMatch(inventorySearchApplyRule, /font-weight:\s*900/)
   assert.match(inventorySearchApplyRule, /color:\s*var\(--positive-deep\)/)
+  assert.match(inventorySearchApplyRule, /opacity:\s*0\.72/)
+  assert.doesNotMatch(inventorySearchApplyRule, /opacity:\s*1/)
   assert.match(inventorySearchApplyRule, /cursor:\s*pointer/)
   assert.doesNotMatch(inventorySearchApplyRule, /background:/)
   assert.match(cssRule('.inventory-search-apply:focus-visible'), /box-shadow:\s*0 0 0 3px/)
