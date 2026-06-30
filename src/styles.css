@@ -825,7 +825,7 @@ a:focus-visible,
 }
 .inventory-notice,
 .inventory-error {
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-md);
   font-size: 12px;
   font-weight: 700;
