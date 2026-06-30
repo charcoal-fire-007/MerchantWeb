@@ -652,7 +652,7 @@ a:focus-visible,
   outline: none;
   font-size: 13px;
 }
-.inventory-picker-toolbar input:focus { border-color: rgba(159,232,112,0.85); background: var(--canvas); }
+.inventory-picker-toolbar input:focus { border-color: rgba(159,232,112,0.58); background: rgba(255,255,255,0.32); }
 .inventory-picker-toolbar input:focus-visible {
   box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
 }
