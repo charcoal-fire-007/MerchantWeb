@@ -688,7 +688,7 @@ a:focus-visible,
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 3px;
   align-items: center;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border: 0;
   border-bottom: 1px solid rgba(0,0,0,0.032);
   background: transparent;
