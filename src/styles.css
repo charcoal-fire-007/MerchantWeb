@@ -779,7 +779,7 @@ a:focus-visible,
 }
 .inventory-option-row.selected:hover .inventory-remove-row,
 .inventory-option-row.selected:focus-within .inventory-remove-row {
-  opacity: 0.78;
+  opacity: 0.66;
   pointer-events: auto;
   transform: translateX(0);
 }
