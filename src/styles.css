@@ -617,7 +617,7 @@ a:focus-visible,
 .bulk-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ─── Inventory & Feedback ─── */
-.inventory-page { display: grid; gap: 8px; }
+.inventory-page { display: grid; gap: 6px; }
 .inventory-layout {
   display: grid;
   grid-template-columns: minmax(0, 584px);
