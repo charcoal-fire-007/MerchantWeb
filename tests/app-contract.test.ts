@@ -726,7 +726,7 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.match(inventoryOptionRowRule, /gap:\s*4px/)
   assert.match(inventoryOptionRowRule, /padding:\s*2px 6px/)
   assert.match(inventoryOptionRowRule, /border:\s*0/)
-  assert.match(inventoryOptionRowRule, /border-bottom:\s*1px solid rgba\(0,0,0,0\.045\)/)
+  assert.match(inventoryOptionRowRule, /border-bottom:\s*1px solid rgba\(0,0,0,0\.032\)/)
   assert.match(inventoryOptionRowRule, /background:\s*transparent/)
   assert.doesNotMatch(inventoryOptionRowRule, /border-radius:\s*var\(--radius-md\)/)
   assert.doesNotMatch(inventoryOptionRowRule, /background:\s*rgba\(232,235,230,0\.34\)/)

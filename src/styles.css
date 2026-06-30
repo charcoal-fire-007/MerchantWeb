@@ -690,7 +690,7 @@ a:focus-visible,
   align-items: center;
   padding: 2px 6px;
   border: 0;
-  border-bottom: 1px solid rgba(0,0,0,0.045);
+  border-bottom: 1px solid rgba(0,0,0,0.032);
   background: transparent;
   color: var(--ink);
   text-align: left;
