@@ -707,7 +707,7 @@ a:focus-visible,
 .inventory-option-row:focus-visible {
   border-color: rgba(159,232,112,0.56);
   border-radius: var(--radius-md);
-  box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
+  box-shadow: 0 0 0 3px rgba(159,232,112,0.22);
 }
 .inventory-option-row.selected {
   background: transparent;
