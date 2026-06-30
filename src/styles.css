@@ -686,7 +686,7 @@ a:focus-visible,
   min-height: 36px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 4px;
+  gap: 3px;
   align-items: center;
   padding: 2px 6px;
   border: 0;
