@@ -758,10 +758,10 @@ a:focus-visible,
 }
 .inventory-remove-row {
   grid-column: 3;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  min-height: 22px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
   padding: 0;
   align-self: center;
   font-size: 15px;
