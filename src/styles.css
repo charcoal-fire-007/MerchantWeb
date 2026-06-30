@@ -807,11 +807,25 @@ a:focus-visible,
   gap: 12px;
   margin-top: 14px;
 }
+.inventory-feedback-section.is-quick {
+  position: relative;
+  gap: 8px;
+}
 .inventory-feedback-strip {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   min-height: 32px;
+}
+.inventory-feedback-section.is-quick .inventory-feedback-strip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: 0;
+  z-index: 3;
+}
+.inventory-feedback-section.is-quick .product-application-card {
+  padding-right: 54px;
 }
 .inventory-feedback-actions {
   display: inline-flex;

@@ -3061,6 +3061,7 @@ async function run(task: () => Promise<void>) {
         <section
           v-if="navActive === 'machineInventory' && feedbackPanelExpanded"
           class="inventory-feedback-section"
+          :class="{ 'is-quick': inventoryApplicationQuickMode }"
         >
           <div class="inventory-feedback-strip">
             <div class="inventory-feedback-actions">
