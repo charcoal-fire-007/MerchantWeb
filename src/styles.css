@@ -720,7 +720,7 @@ a:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .inventory-option-row.invalid {
   border-color: rgba(220,38,38,0.32);
