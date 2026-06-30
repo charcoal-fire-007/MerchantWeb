@@ -628,7 +628,7 @@ a:focus-visible,
 .inventory-picker-card {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding: 0;
 }
 .inventory-picker-toolbar {
@@ -680,7 +680,7 @@ a:focus-visible,
   outline: none;
   box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
 }
-.inventory-option-list { display: grid; gap: 6px; }
+.inventory-option-list { display: grid; gap: 4px; }
 .inventory-option-row {
   width: 100%;
   min-height: 38px;
@@ -832,6 +832,7 @@ a:focus-visible,
 .inventory-feedback-section.is-quick {
   position: relative;
   gap: 8px;
+  margin-top: 6px;
 }
 .inventory-feedback-strip {
   display: flex;
@@ -841,13 +842,25 @@ a:focus-visible,
 }
 .inventory-feedback-section.is-quick .inventory-feedback-strip {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   min-height: 0;
   z-index: 3;
 }
 .inventory-feedback-section.is-quick .product-application-card {
-  padding-right: 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 34px 0 0;
+  margin-bottom: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.inventory-feedback-section.is-quick .feedback-submit {
+  min-width: 96px;
+  min-height: 34px;
+  padding: 0 14px;
 }
 .inventory-feedback-actions {
   display: inline-flex;
@@ -872,6 +885,12 @@ a:focus-visible,
   background: transparent;
   font-size: 18px;
   line-height: 1;
+}
+.inventory-feedback-section.is-quick .inventory-feedback-close {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .feedback-tabs {
@@ -1567,6 +1586,15 @@ a:focus-visible,
   }
   .feedback-form-card,
   .feedback-record-panel { padding: 12px; }
+  .inventory-feedback-section.is-quick .product-application-card {
+    grid-template-columns: 1fr;
+  }
+  .inventory-feedback-section.is-quick .inventory-feedback-close {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
   .feedback-record-header {
     align-items: center;
     gap: 8px;
