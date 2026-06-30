@@ -828,7 +828,7 @@ a:focus-visible,
   padding: 5px 8px;
   border-radius: var(--radius-md);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.25;
 }
 .inventory-notice { color: var(--positive-deep); background: rgba(159,232,112,0.2); }
