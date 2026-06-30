@@ -976,6 +976,37 @@ function addInventoryOption(option: MerchantInventoryOption) {
   focusInventoryQuantityInput(rowKey)
 }
 
+function handleInventorySearchEnter(event: KeyboardEvent) {
+  if (event.isComposing) {
+    return
+  }
+
+  event.preventDefault()
+  const [firstOption, secondOption] = filteredInventoryOptions.value
+  if (firstOption && !secondOption) {
+    addInventoryOption(firstOption)
+    return
+  }
+
+  if (inventorySearchHasNoMatches.value) {
+    openInventoryProductApplicationFromSearch()
+  }
+}
+
+function handleInventorySearchEscape(event: KeyboardEvent) {
+  if (event.isComposing) {
+    return
+  }
+
+  if (!inventorySearch.value) {
+    return
+  }
+
+  event.preventDefault()
+  inventorySearch.value = ''
+  focusInventorySearchInput()
+}
+
 function removeInventoryRow(key: string) {
   inventoryRows.value = inventoryRows.value.filter((row) => row.key !== key)
 }
@@ -1028,6 +1059,14 @@ function focusInventoryQuantityInput(rowKey: string) {
   })
 }
 
+function focusInventorySearchInput() {
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('input[data-inventory-search]')
+    input?.focus()
+    input?.select()
+  })
+}
+
 async function submitInventorySnapshot() {
   if (inventorySubmitting.value) {
     return
@@ -1069,6 +1108,7 @@ async function submitInventorySnapshot() {
     }
     inventoryNotice.value = `预览已提交 ${items.length} 台机器库存`
     inventoryRows.value = []
+    focusInventorySearchInput()
     return
   }
 
@@ -1078,6 +1118,7 @@ async function submitInventorySnapshot() {
     inventoryNotice.value = `已提交 ${result.items.length || items.length} 台机器库存`
     inventoryRows.value = []
     await refreshInventoryOptions()
+    focusInventorySearchInput()
   } catch (err) {
     inventoryError.value = err instanceof Error ? err.message : '库存提交失败'
   } finally {
@@ -2805,7 +2846,17 @@ async function run(task: () => Promise<void>) {
             <div class="inventory-layout">
               <section class="inventory-picker-card">
                 <div class="inventory-picker-toolbar">
-                  <input v-model="inventorySearch" placeholder="搜索机器" />
+                  <input
+                    v-model="inventorySearch"
+                    type="search"
+                    enterkeyhint="next"
+                    autocomplete="off"
+                    aria-label="搜索机器"
+                    data-inventory-search
+                    @keydown.enter="handleInventorySearchEnter"
+                    @keydown.esc="handleInventorySearchEscape"
+                    placeholder="搜索机器"
+                  />
                 </div>
 
                 <div v-if="inventoryLoading" class="notif-empty">加载中...</div>
@@ -2839,6 +2890,8 @@ async function run(task: () => Promise<void>) {
                         :aria-label="`${item.row.product} 库存数量`"
                         type="number"
                         inputmode="numeric"
+                        enterkeyhint="done"
+                        autocomplete="off"
                         min="0"
                         step="1"
                         :aria-invalid="isInventoryRowQuantityInvalid(item.row) ? 'true' : 'false'"

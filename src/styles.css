@@ -651,6 +651,9 @@ a:focus-visible,
   font-size: 13px;
 }
 .inventory-picker-toolbar input:focus { border-color: rgba(159,232,112,0.85); background: var(--canvas); }
+.inventory-picker-toolbar input:focus-visible {
+  box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
+}
 .inventory-option-list { display: grid; gap: 8px; }
 .inventory-option-row {
   width: 100%;
@@ -686,6 +689,11 @@ a:focus-visible,
   color: inherit;
   text-align: left;
   font: inherit;
+}
+.inventory-option-select:focus-visible {
+  outline: none;
+  border-radius: calc(var(--radius-md) - 4px);
+  box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
 }
 .inventory-option-main strong {
   overflow: hidden;
@@ -732,6 +740,9 @@ a:focus-visible,
   font-weight: 900;
 }
 .inventory-quantity-field input:focus { border-color: rgba(159,232,112,0.85); }
+.inventory-quantity-field input:focus-visible {
+  box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
+}
 .inventory-option-row.invalid .inventory-quantity-field input {
   border-color: rgba(220,38,38,0.55);
   background: #fff7f7;
