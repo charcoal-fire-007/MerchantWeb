@@ -771,8 +771,7 @@ a:focus-visible,
   background: transparent;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(1px);
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  transition: opacity 0.14s ease;
 }
 .inventory-remove-row:hover {
   background: transparent;
@@ -781,7 +780,6 @@ a:focus-visible,
 .inventory-option-row.selected:focus-within .inventory-remove-row {
   opacity: 0.66;
   pointer-events: auto;
-  transform: translateX(0);
 }
 @media (hover: none), (pointer: coarse) {
   .inventory-search-apply {
