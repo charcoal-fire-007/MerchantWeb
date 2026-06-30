@@ -768,6 +768,23 @@ a:focus-visible,
   line-height: 1;
   color: var(--mute);
   background: rgba(14,15,12,0.045);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(3px);
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+.inventory-option-row.selected:hover .inventory-remove-row,
+.inventory-option-row.selected:focus-within .inventory-remove-row {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+@media (hover: none), (pointer: coarse) {
+  .inventory-remove-row {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
 }
 .inventory-submit-footer {
   display: grid;
