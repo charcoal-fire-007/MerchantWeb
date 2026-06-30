@@ -740,7 +740,7 @@ a:focus-visible,
   font-size: 13px;
   font-weight: 500;
 }
-.inventory-quantity-field input:focus { border-color: rgba(159,232,112,0.85); }
+.inventory-quantity-field input:focus { border-color: rgba(159,232,112,0.58); }
 .inventory-quantity-field input:focus-visible {
   box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
 }
