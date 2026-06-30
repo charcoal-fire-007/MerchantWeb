@@ -680,7 +680,7 @@ a:focus-visible,
   outline: none;
   box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
 }
-.inventory-option-list { display: grid; gap: 3px; }
+.inventory-option-list { display: grid; gap: 2px; }
 .inventory-option-row {
   width: 100%;
   min-height: 34px;
