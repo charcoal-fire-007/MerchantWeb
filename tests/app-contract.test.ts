@@ -720,6 +720,14 @@ test('machine inventory returns focus to search after submitting', () => {
   assert.match(appSource, /await refreshInventoryOptions\(\)[\s\S]*focusInventorySearchInput\(\)/)
 })
 
+test('machine inventory returns focus to search after removing the last selected row', () => {
+  const removeInventoryRowSource = appSource.match(/function removeInventoryRow\(key: string\) \{[\s\S]*?\r?\n\}\r?\n\r?\nfunction updateInventoryRowQuantity/)?.[0] || ''
+  assert.match(removeInventoryRowSource, /inventoryRows\.value = inventoryRows\.value\.filter\(\(row\) => row\.key !== key\)/)
+  assert.match(removeInventoryRowSource, /if \(inventoryRows\.value\.length === 0\) \{[\s\S]*focusInventorySearchInput\(\)[\s\S]*\}/)
+  assert.doesNotMatch(appSource, /class="inventory-remove-all"/)
+  assert.doesNotMatch(cssSource, /\.inventory-remove-all/)
+})
+
 test('mobile layout moves primary navigation into a bottom tab bar', () => {
   assert.match(appSource, /class="nav-badge"[\s\S]*navUnreadCount/)
   assert.match(appSource, /navActiveIndex = computed\(\(\) => \(\{ dashboard: 0, products: 1, machineInventory: 2, notifications: 3 \}\[navActive\.value\] \?\? 0\)\)/)

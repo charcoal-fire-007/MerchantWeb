@@ -1009,6 +1009,9 @@ function handleInventorySearchEscape(event: KeyboardEvent) {
 
 function removeInventoryRow(key: string) {
   inventoryRows.value = inventoryRows.value.filter((row) => row.key !== key)
+  if (inventoryRows.value.length === 0) {
+    focusInventorySearchInput()
+  }
 }
 
 function updateInventoryRowQuantity(rowKey: string, event: Event) {
