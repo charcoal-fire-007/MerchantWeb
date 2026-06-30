@@ -914,6 +914,8 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.doesNotMatch(inventoryRemoveRowRule, /background 0\.16s ease/)
   assert.match(inventoryRemoveRowRule, /opacity:\s*0/)
   assert.match(inventoryRemoveRowRule, /pointer-events:\s*none/)
+  assert.match(inventoryRemoveRowRule, /transform:\s*translateX\(2px\)/)
+  assert.doesNotMatch(inventoryRemoveRowRule, /transform:\s*translateX\(3px\)/)
   assert.match(cssRule('.inventory-remove-row:hover'), /background:\s*transparent/)
   assert.match(cssSource, /\.inventory-option-row\.selected:hover\s+\.inventory-remove-row,\s*\.inventory-option-row\.selected:focus-within\s+\.inventory-remove-row\s*\{[\s\S]*opacity:\s*1[\s\S]*pointer-events:\s*auto/)
   assert.match(cssSource, /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*\{[\s\S]*\.inventory-remove-row\s*\{[\s\S]*width:\s*28px[\s\S]*min-width:\s*28px[\s\S]*height:\s*28px[\s\S]*min-height:\s*28px[\s\S]*opacity:\s*1[\s\S]*pointer-events:\s*auto/)
