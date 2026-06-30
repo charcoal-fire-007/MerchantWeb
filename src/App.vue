@@ -329,7 +329,7 @@ const inventorySearchHasNoMatches = computed(() =>
   Boolean(inventorySearchDraftName.value) && filteredInventoryOptions.value.length === 0
 )
 const inventoryShouldShowEmptyState = computed(() =>
-  inventorySearchHasNoMatches.value || filteredInventoryOptionRows.value.length === 0
+  !inventorySearchHasNoMatches.value && filteredInventoryOptionRows.value.length === 0
 )
 const inventoryCanSubmit = computed(() =>
   inventoryRows.value.length > 0 && hasValidInventorySnapshotQuantities(inventoryRows.value)
@@ -1152,7 +1152,7 @@ async function submitInventorySnapshot() {
         option.latest_quantity = submitted.quantity
       }
     }
-    showInventoryNotice(`预览已提交 ${items.length} 台机器库存`)
+    showInventoryNotice('已提交')
     inventoryRows.value = []
     focusInventorySearchInput()
     return
@@ -1160,8 +1160,8 @@ async function submitInventorySnapshot() {
 
   inventorySubmitting.value = true
   try {
-    const result = await api.submitInventorySnapshot(items)
-    showInventoryNotice(`已提交 ${result.items.length || items.length} 台机器库存`)
+    await api.submitInventorySnapshot(items)
+    showInventoryNotice('已提交')
     inventoryRows.value = []
     await refreshInventoryOptions()
     focusInventorySearchInput()
@@ -2925,20 +2925,35 @@ async function run(task: () => Promise<void>) {
             <div class="inventory-layout">
               <section class="inventory-picker-card">
                 <div class="inventory-picker-toolbar">
-                  <input
-                    v-model="inventorySearch"
-                    type="search"
-                    enterkeyhint="next"
-                    autocomplete="off"
-                    aria-label="搜索机器"
-                    data-inventory-search
-                    @keydown.enter="handleInventorySearchEnter"
-                    @keydown.esc="handleInventorySearchEscape"
-                    placeholder="搜索机器"
-                  />
+                  <div class="inventory-search-box">
+                    <input
+                      v-model="inventorySearch"
+                      type="search"
+                      enterkeyhint="next"
+                      autocomplete="off"
+                      aria-label="搜索机器"
+                      data-inventory-search
+                      @keydown.enter="handleInventorySearchEnter"
+                      @keydown.esc="handleInventorySearchEscape"
+                      placeholder="搜索"
+                    />
+                    <span
+                      v-if="inventorySearchHasNoMatches"
+                      class="inventory-search-apply"
+                      role="button"
+                      tabindex="0"
+                      :aria-label="`申请 ${inventorySearchDraftName}`"
+                      :title="`申请 ${inventorySearchDraftName}`"
+                      @click="openInventoryProductApplicationFromSearch"
+                      @keydown.enter.prevent="openInventoryProductApplicationFromSearch"
+                      @keydown.space.prevent="openInventoryProductApplicationFromSearch"
+                    >
+                      +
+                    </span>
+                  </div>
                 </div>
 
-                <div v-if="inventoryLoading" class="notif-empty">加载中...</div>
+                <div v-if="inventoryLoading" class="inventory-empty" role="status" aria-label="加载中">...</div>
                 <div v-else class="inventory-option-list">
                   <div
                     v-for="item in filteredInventoryOptionRows"
@@ -2984,22 +2999,17 @@ async function run(task: () => Promise<void>) {
                       </button>
                     </template>
                   </div>
-                  <div v-if="inventoryShouldShowEmptyState" class="inventory-empty">
-                    <span v-if="!inventorySearchHasNoMatches">暂无机器</span>
-                    <button
-                      v-if="inventorySearchHasNoMatches"
-                      type="button"
-                      class="inventory-empty-action"
-                      @click="openInventoryProductApplicationFromSearch"
-                    >
-                      申请
-                    </button>
+                  <div
+                    v-if="inventoryShouldShowEmptyState"
+                    class="inventory-empty"
+                  >
+                    <span>暂无</span>
                   </div>
                 </div>
 
                 <div v-if="inventoryCanSubmit" class="inventory-submit-footer">
-                  <button class="btn btn-primary" :disabled="inventorySubmitDisabled" @click="submitInventorySnapshot">
-                    {{ inventorySubmitting ? '提交中' : '提交' }}
+                  <button class="btn btn-primary" :disabled="inventorySubmitDisabled" :aria-label="inventorySubmitting ? '提交中' : '提交库存'" @click="submitInventorySnapshot">
+                    {{ inventorySubmitting ? '...' : '提交' }}
                   </button>
                 </div>
               </section>
@@ -3233,9 +3243,10 @@ async function run(task: () => Promise<void>) {
               ref="productApplicationSubmitButton"
               class="btn btn-primary feedback-submit"
               :disabled="productApplicationSubmitting"
+              :aria-label="productApplicationSubmitting ? '提交中' : productApplicationSubmitText"
               @click="submitProductApplication"
             >
-              {{ productApplicationSubmitting ? '提交中...' : productApplicationSubmitText }}
+              {{ productApplicationSubmitting ? (inventoryApplicationQuickMode ? '...' : '提交中...') : productApplicationSubmitText }}
             </button>
           </div>
 
