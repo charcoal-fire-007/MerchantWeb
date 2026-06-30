@@ -120,11 +120,13 @@ const productApplicationOptions = ref<MerchantProductApplicationOption[]>([])
 const productApplicationSearchInput = ref('')
 const productApplicationSearchQuery = ref('')
 const productApplicationPickerOpen = ref(false)
+const productApplicationSubmitButton = ref<HTMLButtonElement | null>(null)
 const mobilePickerMode = ref(false)
 const productApplicationRecords = ref<MerchantProductApplicationRecord[]>([])
 const submissionRecordsExpanded = ref(false)
 const feedbackPanelExpanded = ref(false)
 const feedbackCenterMode = ref<FeedbackCenterMode>('product_application')
+const inventoryApplicationQuickMode = ref(false)
 const feedbackMode = ref<MerchantFeedbackType>('price_suggestion')
 const priceProductPickerOpen = ref(false)
 const feedbackLoading = ref(false)
@@ -331,9 +333,7 @@ const inventoryShouldShowEmptyState = computed(() =>
 const inventoryCanSubmit = computed(() =>
   inventoryRows.value.length > 0 && hasValidInventorySnapshotQuantities(inventoryRows.value)
 )
-const inventorySubmitDisabled = computed(() =>
-  inventorySubmitting.value || !inventoryCanSubmit.value
-)
+const inventorySubmitDisabled = computed(() => inventorySubmitting.value)
 const feedbackProductOptions = computed(() => {
   const seen = new Set<string>()
   return products.value.filter((product) => {
@@ -369,6 +369,13 @@ const productApplicationIsNew = computed(() =>
 const productApplicationSelectedName = computed(() =>
   selectedProductApplicationOption.value?.product || newProductApplicationForm.product.trim()
 )
+const shouldShowFeedbackTabs = computed(() => !inventoryApplicationQuickMode.value)
+const shouldShowProductApplicationSelected = computed(() =>
+  Boolean(productApplicationSelectedName.value) && !inventoryApplicationQuickMode.value
+)
+const shouldShowProductApplicationPicker = computed(() => !inventoryApplicationQuickMode.value)
+const shouldShowProductApplicationReason = computed(() => !inventoryApplicationQuickMode.value)
+const productApplicationSubmitText = computed(() => inventoryApplicationQuickMode.value ? '提交' : '提交商品申请')
 const productApplicationReason = computed({
   get() {
     return productApplicationIsNew.value ? newProductApplicationForm.reason : existingProductApplicationForm.reason
@@ -403,6 +410,9 @@ const submissionRecords = computed<SubmissionRecord[]>(() => {
   return [...productApplicationItems, ...feedbackItems]
     .sort((left, right) => recordTime(right.createdAt) - recordTime(left.createdAt))
 })
+const shouldShowSubmissionRecords = computed(() =>
+  !inventoryApplicationQuickMode.value && (feedbackLoading.value || submissionRecords.value.length > 0)
+)
 const hasHiddenSubmissionRecords = computed(() => submissionRecords.value.length > 0)
 const visibleSubmissionRecords = computed(() =>
   submissionRecordsExpanded.value ? submissionRecords.value : submissionRecords.value.slice(0, 2)
@@ -590,6 +600,7 @@ function resetFeedbackPanelState(options: { clearDrafts?: boolean } = {}) {
   priceProductPickerOpen.value = false
   feedbackNotice.value = ''
   feedbackError.value = ''
+  inventoryApplicationQuickMode.value = false
 
   if (!options.clearDrafts) return
 
@@ -941,17 +952,9 @@ function inventoryOptionLatestQuantity(option: MerchantInventoryOption) {
   return typeof option.latest_quantity === 'number' ? option.latest_quantity : null
 }
 
-function inventoryOptionStatusText(option: MerchantInventoryOption) {
-  return option.source_type === 'owned' && option.available === false ? '暂停' : ''
-}
-
 function inventoryOptionActionText(option: MerchantInventoryOption) {
   const product = option.product.trim() || '机器'
   return inventorySelectedRuleIds.value.has(option.rule_id) ? `编辑 ${product} 数量` : `选择 ${product}`
-}
-
-function shouldShowInventoryOptionStatus(option: MerchantInventoryOption) {
-  return option.source_type === 'owned' && option.available === false
 }
 
 function findExactInventorySearchOption() {
@@ -1215,14 +1218,25 @@ function goToNotifications() {
   newDispatchBurstCount.value = 0
 }
 
-function openInventoryFeedback(mode: FeedbackCenterMode = 'product_application') {
+function openInventoryFeedback(mode: FeedbackCenterMode = 'product_application', options: { quickApplication?: boolean } = {}) {
   feedbackCenterMode.value = mode
+  inventoryApplicationQuickMode.value = Boolean(options.quickApplication && mode === 'product_application')
   feedbackPanelExpanded.value = true
   feedbackNotice.value = ''
   feedbackError.value = ''
   navActive.value = 'machineInventory'
   scrollInventoryFeedbackIntoView()
+  if (inventoryApplicationQuickMode.value) {
+    focusQuickProductApplicationSubmit()
+  }
   void refreshFeedbackCenter()
+}
+
+function focusQuickProductApplicationSubmit() {
+  void nextTick(() => {
+    if (!inventoryApplicationQuickMode.value) return
+    productApplicationSubmitButton.value?.focus()
+  })
 }
 
 function scrollInventoryFeedbackIntoView() {
@@ -1243,6 +1257,7 @@ function goToFeedback(mode: FeedbackCenterMode = 'product_application') {
 
 function goToPriceFeedback(product: MerchantProduct) {
   feedbackCenterMode.value = 'feedback'
+  inventoryApplicationQuickMode.value = false
   feedbackPanelExpanded.value = true
   feedbackMode.value = 'price_suggestion'
   priceFeedbackForm.product = product.product
@@ -1259,6 +1274,7 @@ function goToPriceFeedback(product: MerchantProduct) {
 
 function switchFeedbackCenterMode(mode: FeedbackCenterMode) {
   feedbackCenterMode.value = mode
+  inventoryApplicationQuickMode.value = false
   feedbackNotice.value = ''
   feedbackError.value = ''
   if (mode === 'product_application') {
@@ -1339,7 +1355,7 @@ function openInventoryProductApplicationFromSearch() {
 
   productApplicationSearchInput.value = product
   productApplicationSearchQuery.value = product
-  openInventoryFeedback('product_application')
+  openInventoryFeedback('product_application', { quickApplication: true })
   chooseNewProductApplicationFromSearch()
 }
 
@@ -1538,9 +1554,30 @@ async function submitProductApplication() {
   await submitExistingProductApplication()
 }
 
+function getProductApplicationReason() {
+  const reason = productApplicationReason.value.trim()
+  if (reason || !inventoryApplicationQuickMode.value) return reason
+  const product = productApplicationSelectedName.value || productApplicationDraftName.value || inventorySearchDraftName.value || '该商品'
+  return `${product} 库存页申请新增`
+}
+
+function resetSubmittedProductApplication(applicationType: 'existing_product' | 'new_product') {
+  if (applicationType === 'existing_product') {
+    existingProductApplicationForm.productId = ''
+    existingProductApplicationForm.reason = ''
+  } else {
+    newProductApplicationForm.product = ''
+    newProductApplicationForm.modelNote = ''
+    newProductApplicationForm.reason = ''
+  }
+  productApplicationSearchInput.value = ''
+  productApplicationSearchQuery.value = ''
+  inventoryApplicationQuickMode.value = false
+}
+
 async function submitExistingProductApplication() {
   const option = selectedProductApplicationOption.value
-  const reason = existingProductApplicationForm.reason.trim()
+  const reason = getProductApplicationReason()
   if (!option) {
     feedbackError.value = '请先选择商品，或搜索后申请新增商品'
     return
@@ -1569,10 +1606,7 @@ async function submitExistingProductApplication() {
       contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
-    existingProductApplicationForm.productId = ''
-    existingProductApplicationForm.reason = ''
-    productApplicationSearchInput.value = ''
-    productApplicationSearchQuery.value = ''
+    resetSubmittedProductApplication('existing_product')
     feedbackNotice.value = '预览已记录商品申请'
     return
   }
@@ -1580,10 +1614,7 @@ async function submitExistingProductApplication() {
   try {
     const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
-    existingProductApplicationForm.productId = ''
-    existingProductApplicationForm.reason = ''
-    productApplicationSearchInput.value = ''
-    productApplicationSearchQuery.value = ''
+    resetSubmittedProductApplication('existing_product')
     feedbackNotice.value = '商品申请已提交，平台审批通过后会为你开通'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '商品申请提交失败')
@@ -1594,7 +1625,7 @@ async function submitExistingProductApplication() {
 
 async function submitNewProductApplication() {
   const product = newProductApplicationForm.product.trim()
-  const reason = newProductApplicationForm.reason.trim()
+  const reason = getProductApplicationReason()
   if (!product) {
     feedbackError.value = '请填写商品名称'
     return
@@ -1621,11 +1652,7 @@ async function submitNewProductApplication() {
       contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
-    newProductApplicationForm.product = ''
-    newProductApplicationForm.modelNote = ''
-    newProductApplicationForm.reason = ''
-    productApplicationSearchInput.value = ''
-    productApplicationSearchQuery.value = ''
+    resetSubmittedProductApplication('new_product')
     feedbackNotice.value = '预览已记录新增商品申请'
     return
   }
@@ -1633,11 +1660,7 @@ async function submitNewProductApplication() {
   try {
     const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
-    newProductApplicationForm.product = ''
-    newProductApplicationForm.modelNote = ''
-    newProductApplicationForm.reason = ''
-    productApplicationSearchInput.value = ''
-    productApplicationSearchQuery.value = ''
+    resetSubmittedProductApplication('new_product')
     feedbackNotice.value = '新增商品申请已提交，平台将尽快处理'
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '新增商品申请提交失败')
@@ -2886,21 +2909,19 @@ async function run(task: () => Promise<void>) {
                     :key="inventoryOptionKey(item.option)"
                     class="inventory-option-row"
                     :class="{ selected: Boolean(item.row), invalid: item.row ? isInventoryRowQuantityInvalid(item.row) : false }"
+                    :role="item.row ? undefined : 'button'"
+                    :tabindex="item.row ? undefined : 0"
+                    :aria-label="inventoryOptionActionText(item.option)"
+                    :title="inventoryOptionActionText(item.option)"
+                    @click="addInventoryOption(item.option)"
+                    @keydown.enter.self.prevent="addInventoryOption(item.option)"
+                    @keydown.space.self.prevent="addInventoryOption(item.option)"
                   >
-                    <button
-                      type="button"
-                      class="inventory-option-main inventory-option-select"
-                      :aria-label="inventoryOptionActionText(item.option)"
-                      :title="inventoryOptionActionText(item.option)"
-                      @click="addInventoryOption(item.option)"
-                    >
+                    <span class="inventory-option-main inventory-option-name">
                       <strong>{{ item.option.product }}</strong>
-                    </button>
-                    <span v-if="shouldShowInventoryOptionStatus(item.option)" class="inventory-option-tags">
-                      <em class="inventory-chip muted">{{ inventoryOptionStatusText(item.option) }}</em>
                     </span>
                     <template v-if="item.row">
-                      <label class="inventory-quantity-field inventory-inline-quantity">
+                      <label class="inventory-quantity-field inventory-inline-quantity" @click.stop>
                       <input
                         :value="item.row.quantity"
                         :data-inventory-row-key="item.row.key"
@@ -2921,26 +2942,26 @@ async function run(task: () => Promise<void>) {
                         type="button"
                         class="btn btn-ghost inventory-remove-row"
                         aria-label="移除"
-                        @click="removeInventoryRow(item.row.key)"
+                        @click.stop="removeInventoryRow(item.row.key)"
                       >
                         &times;
                       </button>
                     </template>
                   </div>
                   <div v-if="inventoryShouldShowEmptyState" class="inventory-empty">
-                    <span>{{ inventorySearchHasNoMatches ? '没有找到机器' : '暂无机器' }}</span>
+                    <span v-if="!inventorySearchHasNoMatches">暂无机器</span>
                     <button
                       v-if="inventorySearchHasNoMatches"
                       type="button"
-                      class="inventory-empty-apply"
+                      class="inventory-empty-action"
                       @click="openInventoryProductApplicationFromSearch"
                     >
-                      申请新增
+                      申请
                     </button>
                   </div>
                 </div>
 
-                <div v-if="inventoryRows.length > 0" class="inventory-submit-footer">
+                <div v-if="inventoryCanSubmit" class="inventory-submit-footer">
                   <button class="btn btn-primary" :disabled="inventorySubmitDisabled" @click="submitInventorySnapshot">
                     {{ inventorySubmitting ? '提交中' : '提交' }}
                   </button>
@@ -3019,7 +3040,7 @@ async function run(task: () => Promise<void>) {
             </div>
           </div>
 
-          <div class="feedback-tabs" role="tablist" aria-label="申请与反馈类型">
+          <div v-if="shouldShowFeedbackTabs" class="feedback-tabs" role="tablist" aria-label="申请与反馈类型">
             <span
               class="feedback-tab-indicator"
               :style="{ '--feedback-active-index': feedbackCenterMode === 'feedback' ? 1 : 0 }"
@@ -3044,8 +3065,15 @@ async function run(task: () => Promise<void>) {
 
           <div class="feedback-form-card product-application-card" v-if="feedbackCenterMode === 'product_application'">
             <div class="field">
-              <label>申请商品</label>
-              <div class="product-application-picker">
+              <label id="product-application-field-label" :class="{ 'sr-only': inventoryApplicationQuickMode }">申请商品</label>
+              <output
+                v-if="inventoryApplicationQuickMode && productApplicationSelectedName"
+                class="product-application-fixed-name"
+                aria-labelledby="product-application-field-label"
+              >
+                <strong>{{ productApplicationSelectedName }}</strong>
+              </output>
+              <div v-if="shouldShowProductApplicationPicker" class="product-application-picker">
                 <div v-if="productApplicationOptionsLoading" class="notif-empty">可申请商品加载中...</div>
                 <div class="product-application-combobox" :class="{ open: productApplicationPickerOpen }">
                   <div class="product-application-search">
@@ -3141,7 +3169,7 @@ async function run(task: () => Promise<void>) {
                   </div>
                 </div>
                 <div
-                  v-if="productApplicationSelectedName"
+                  v-if="shouldShowProductApplicationSelected"
                   class="product-application-selected"
                   role="button"
                   tabindex="0"
@@ -3156,16 +3184,21 @@ async function run(task: () => Promise<void>) {
                 </div>
               </div>
             </div>
-            <div class="field" v-if="productApplicationIsNew">
+            <div class="field" v-if="productApplicationIsNew && !inventoryApplicationQuickMode">
               <label>品牌/型号补充（选填）</label>
               <input v-model="newProductApplicationForm.modelNote" placeholder="例如：双镜头套装，可日租" />
             </div>
-            <div class="field">
+            <div class="field" v-if="shouldShowProductApplicationReason">
               <label>申请说明</label>
               <textarea v-model="productApplicationReason" placeholder="例如：我有该设备，可接单。" />
             </div>
-            <button class="btn btn-primary feedback-submit" :disabled="productApplicationSubmitting" @click="submitProductApplication">
-              {{ productApplicationSubmitting ? '提交中...' : '提交商品申请' }}
+            <button
+              ref="productApplicationSubmitButton"
+              class="btn btn-primary feedback-submit"
+              :disabled="productApplicationSubmitting"
+              @click="submitProductApplication"
+            >
+              {{ productApplicationSubmitting ? '提交中...' : productApplicationSubmitText }}
             </button>
           </div>
 
@@ -3341,7 +3374,7 @@ async function run(task: () => Promise<void>) {
           </div>
 
             <div
-              v-if="feedbackLoading || submissionRecords.length > 0"
+              v-if="shouldShowSubmissionRecords"
               class="feedback-record-panel"
               :class="{ 'is-compact': !submissionRecordsExpanded }"
             >
