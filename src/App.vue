@@ -1575,6 +1575,23 @@ function resetSubmittedProductApplication(applicationType: 'existing_product' | 
   inventoryApplicationQuickMode.value = false
 }
 
+function finishSubmittedProductApplication(applicationType: 'existing_product' | 'new_product', feedbackMessage: string) {
+  const wasQuickApplication = inventoryApplicationQuickMode.value
+  resetSubmittedProductApplication(applicationType)
+
+  if (wasQuickApplication) {
+    feedbackPanelExpanded.value = false
+    feedbackNotice.value = ''
+    feedbackError.value = ''
+    inventoryError.value = ''
+    inventoryNotice.value = '已提交申请'
+    focusInventorySearchInput()
+    return
+  }
+
+  feedbackNotice.value = feedbackMessage
+}
+
 async function submitExistingProductApplication() {
   const option = selectedProductApplicationOption.value
   const reason = getProductApplicationReason()
@@ -1606,16 +1623,14 @@ async function submitExistingProductApplication() {
       contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
-    resetSubmittedProductApplication('existing_product')
-    feedbackNotice.value = '预览已记录商品申请'
+    finishSubmittedProductApplication('existing_product', '预览已记录商品申请')
     return
   }
   productApplicationSubmitting.value = true
   try {
     const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
-    resetSubmittedProductApplication('existing_product')
-    feedbackNotice.value = '商品申请已提交，平台审批通过后会为你开通'
+    finishSubmittedProductApplication('existing_product', '商品申请已提交，平台审批通过后会为你开通')
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '商品申请提交失败')
   } finally {
@@ -1652,16 +1667,14 @@ async function submitNewProductApplication() {
       contact: accountLabel.value,
     })
     prependProductApplicationRecord(record)
-    resetSubmittedProductApplication('new_product')
-    feedbackNotice.value = '预览已记录新增商品申请'
+    finishSubmittedProductApplication('new_product', '预览已记录新增商品申请')
     return
   }
   productApplicationSubmitting.value = true
   try {
     const record = await api.submitProductApplication(payload)
     prependProductApplicationRecord(record)
-    resetSubmittedProductApplication('new_product')
-    feedbackNotice.value = '新增商品申请已提交，平台将尽快处理'
+    finishSubmittedProductApplication('new_product', '新增商品申请已提交，平台将尽快处理')
   } catch (err) {
     feedbackError.value = feedbackErrorMessage(err, '新增商品申请提交失败')
   } finally {
