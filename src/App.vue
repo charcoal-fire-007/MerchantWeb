@@ -1064,6 +1064,11 @@ function handleInventoryQuantityEnter(rowKey: string) {
   }
 }
 
+function handleInventoryQuantityEscape(rowKey: string, event: KeyboardEvent) {
+  event.preventDefault()
+  removeInventoryRow(rowKey)
+}
+
 function focusInventoryQuantityInput(rowKey: string) {
   void nextTick(() => {
     const input = Array.from(document.querySelectorAll<HTMLInputElement>('input[data-inventory-row-key]'))
@@ -2909,6 +2914,7 @@ async function run(task: () => Promise<void>) {
                         :aria-invalid="isInventoryRowQuantityInvalid(item.row) ? 'true' : 'false'"
                         @input="updateInventoryRowQuantity(item.row.key, $event)"
                         @keydown.enter.prevent="handleInventoryQuantityEnter(item.row.key)"
+                        @keydown.esc="handleInventoryQuantityEscape(item.row.key, $event)"
                       />
                       </label>
                       <button
