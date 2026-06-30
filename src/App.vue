@@ -2878,9 +2878,6 @@ async function run(task: () => Promise<void>) {
                       @click="addInventoryOption(item.option)"
                     >
                       <strong>{{ item.option.product }}</strong>
-                      <small v-if="!item.row && inventoryOptionLatestQuantity(item.option) !== null">
-                        {{ inventoryOptionLatestQuantity(item.option) }} 台
-                      </small>
                     </button>
                     <span v-if="shouldShowInventoryOptionStatus(item.option)" class="inventory-option-tags">
                       <em class="inventory-chip muted">{{ inventoryOptionStatusText(item.option) }}</em>

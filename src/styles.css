@@ -702,10 +702,6 @@ a:focus-visible,
   font-size: 13px;
   font-weight: 900;
 }
-.inventory-option-main small {
-  color: var(--mute);
-  font-size: 11px;
-}
 .inventory-option-tags { grid-column: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .inventory-chip {
   min-height: 18px;
