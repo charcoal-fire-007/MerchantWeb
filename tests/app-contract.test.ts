@@ -828,6 +828,8 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.match(cssRuleFromSource(mobileStyles, '.inventory-submit-footer > .btn-primary'), /width:\s*100%/)
   assert.match(cssRule('.inventory-notice,\n.inventory-error'), /padding:\s*6px 8px/)
   assert.match(cssRule('.inventory-notice,\n.inventory-error'), /font-size:\s*12px/)
+  assert.match(cssRule('.inventory-notice,\n.inventory-error'), /font-weight:\s*700/)
+  assert.doesNotMatch(cssRule('.inventory-notice,\n.inventory-error'), /font-weight:\s*800/)
   assert.match(cssRule('.inventory-notice,\n.inventory-error'), /line-height:\s*1\.25/)
   const invalidInventoryOptionRowRule = cssRule('.inventory-option-row.invalid')
   assert.match(invalidInventoryOptionRowRule, /border-color:\s*rgba\(220,38,38,0\.32\)/)
