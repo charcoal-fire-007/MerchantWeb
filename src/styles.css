@@ -628,7 +628,7 @@ a:focus-visible,
 .inventory-picker-card {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   padding: 0;
 }
 .inventory-picker-toolbar {
