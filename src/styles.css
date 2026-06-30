@@ -701,7 +701,7 @@ a:focus-visible,
   cursor: pointer;
 }
 .inventory-option-row:hover {
-  background: rgba(255,255,255,0.58);
+  background: rgba(255,255,255,0.34);
 }
 .inventory-option-row:focus-visible {
   border-color: rgba(159,232,112,0.56);
