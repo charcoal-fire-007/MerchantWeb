@@ -679,7 +679,7 @@ a:focus-visible,
 }
 .inventory-search-apply:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(159,232,112,0.28);
+  box-shadow: 0 0 0 3px rgba(159,232,112,0.22);
 }
 .inventory-option-list { display: grid; gap: 2px; }
 .inventory-option-row {
