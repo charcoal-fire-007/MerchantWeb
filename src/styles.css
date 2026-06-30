@@ -900,6 +900,12 @@ a:focus-visible,
   min-width: 24px;
   height: 24px;
   min-height: 24px;
+  opacity: 0.32;
+  transition: opacity 0.14s ease;
+}
+.inventory-feedback-section.is-quick:hover .inventory-feedback-close,
+.inventory-feedback-section.is-quick:focus-within .inventory-feedback-close {
+  opacity: 0.56;
 }
 
 .feedback-tabs {
@@ -1603,6 +1609,11 @@ a:focus-visible,
     min-width: 30px;
     height: 30px;
     min-height: 30px;
+    opacity: 1;
+  }
+  .inventory-feedback-section.is-quick:hover .inventory-feedback-close,
+  .inventory-feedback-section.is-quick:focus-within .inventory-feedback-close {
+    opacity: 1;
   }
   .feedback-record-header {
     align-items: center;
