@@ -840,8 +840,8 @@ a:focus-visible,
 }
 .inventory-feedback-section.is-quick {
   position: relative;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 4px;
 }
 .inventory-feedback-strip {
   display: flex;
@@ -851,16 +851,16 @@ a:focus-visible,
 }
 .inventory-feedback-section.is-quick .inventory-feedback-strip {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 2px;
+  right: 2px;
   min-height: 0;
   z-index: 3;
 }
 .inventory-feedback-section.is-quick .product-application-card {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 8px 34px 0 0;
+  gap: 6px;
+  padding: 6px 32px 0 0;
   margin-bottom: 0;
   background: transparent;
   border: 0;
@@ -896,10 +896,10 @@ a:focus-visible,
   line-height: 1;
 }
 .inventory-feedback-section.is-quick .inventory-feedback-close {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
 }
 
 .feedback-tabs {
