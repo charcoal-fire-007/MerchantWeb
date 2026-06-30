@@ -647,7 +647,7 @@ a:focus-visible,
   padding: 0 30px 0 8px;
   border: 1px solid rgba(0,0,0,0.022);
   border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.36);
+  background: rgba(255,255,255,0.32);
   color: var(--ink);
   outline: none;
   font-size: 13px;
