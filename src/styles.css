@@ -732,7 +732,7 @@ a:focus-visible,
   min-height: 26px;
   padding: 0 9px;
   border: 1px solid rgba(0,0,0,0.04);
-  border-radius: calc(var(--radius-md) - 2px);
+  border-radius: calc(var(--radius-md) - 4px);
   background: rgba(255,255,255,0.32);
   color: var(--ink);
   outline: none;
