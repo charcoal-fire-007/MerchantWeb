@@ -813,11 +813,11 @@ a:focus-visible,
   border-radius: var(--radius-md);
 }
 .inventory-empty {
-  min-height: 24px;
+  min-height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--mute);
   font-size: 12px;
   border-radius: var(--radius-md);
