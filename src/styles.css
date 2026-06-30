@@ -672,7 +672,7 @@ a:focus-visible,
   border-radius: calc(var(--radius-md) - 3px);
   color: var(--positive-deep);
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
