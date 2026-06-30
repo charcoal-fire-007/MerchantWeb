@@ -645,9 +645,9 @@ a:focus-visible,
   width: 100%;
   min-height: 30px;
   padding: 0 32px 0 9px;
-  border: 1px solid rgba(0,0,0,0.035);
+  border: 1px solid rgba(0,0,0,0.028);
   border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.52);
+  background: rgba(255,255,255,0.44);
   color: var(--ink);
   outline: none;
   font-size: 13px;
