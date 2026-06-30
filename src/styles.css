@@ -617,11 +617,11 @@ a:focus-visible,
 .bulk-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ─── Inventory & Feedback ─── */
-.inventory-page { display: grid; gap: 10px; }
+.inventory-page { display: grid; gap: 8px; }
 .inventory-layout {
   display: grid;
   grid-template-columns: minmax(0, 584px);
-  gap: 10px;
+  gap: 8px;
   align-items: start;
   justify-content: center;
 }
@@ -643,8 +643,8 @@ a:focus-visible,
 }
 .inventory-picker-toolbar input {
   width: 100%;
-  min-height: 32px;
-  padding: 0 34px 0 10px;
+  min-height: 30px;
+  padding: 0 32px 0 9px;
   border: 1px solid rgba(0,0,0,0.035);
   border-radius: var(--radius-md);
   background: rgba(255,255,255,0.52);
@@ -1468,8 +1468,8 @@ a:focus-visible,
   .dispatch-record-table-wrap { display: none; }
   .dispatch-record-cards { display: grid; }
   .dispatch-record-card-head { display: grid; }
-  .inventory-page { gap: 10px; }
-  .inventory-layout { grid-template-columns: 1fr; gap: 8px; }
+  .inventory-page { gap: 8px; }
+  .inventory-layout { grid-template-columns: 1fr; gap: 6px; }
   .inventory-picker-toolbar {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
