@@ -726,7 +726,7 @@ a:focus-visible,
   background: rgba(254,226,226,0.46);
 }
 .inventory-quantity-field { display: block; position: relative; }
-.inventory-inline-quantity { grid-column: 2; width: 72px; }
+.inventory-inline-quantity { grid-column: 2; width: 64px; }
 .inventory-quantity-field input {
   width: 100%;
   min-height: 26px;
@@ -797,7 +797,7 @@ a:focus-visible,
   padding-top: 0;
 }
 .inventory-submit-footer .btn-primary {
-  width: min(112px, 100%);
+  width: min(96px, 100%);
   justify-self: end;
   min-height: 34px;
   border-radius: var(--radius-md);
