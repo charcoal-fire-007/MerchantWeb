@@ -696,7 +696,7 @@ a:focus-visible,
   color: var(--ink);
   text-align: left;
   outline: none;
-  transition: background 0.16s ease;
+  transition: background 0.14s ease;
 }
 .inventory-option-row[tabindex="0"] {
   cursor: pointer;
