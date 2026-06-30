@@ -202,6 +202,7 @@ const notificationHighlightTimers = new Map<string, ReturnType<typeof setTimeout
 let bulkAvailabilityProgressTimer: ReturnType<typeof setInterval> | null = null
 let productApplicationPickerCloseTimer: ReturnType<typeof setTimeout> | null = null
 let priceProductPickerCloseTimer: ReturnType<typeof setTimeout> | null = null
+let inventoryNoticeClearTimer: ReturnType<typeof setTimeout> | null = null
 
 const tokenClaims = computed(() => decodeTokenClaims(token.value))
 const merchantNameFromProducts = computed(() => {
@@ -499,6 +500,7 @@ onUnmounted(() => {
   stopBulkAvailabilityProgress()
   clearProductApplicationPickerCloseTimer()
   clearPriceProductPickerCloseTimer()
+  clearInventoryNoticeTimer()
 })
 watch([filteredEnabled, filteredDisabled, navActive], () => {
   void nextTick(observeProductCards)
@@ -591,6 +593,27 @@ function clearPriceProductPickerCloseTimer() {
     clearTimeout(priceProductPickerCloseTimer)
     priceProductPickerCloseTimer = null
   }
+}
+
+function clearInventoryNoticeTimer() {
+  if (inventoryNoticeClearTimer) {
+    clearTimeout(inventoryNoticeClearTimer)
+    inventoryNoticeClearTimer = null
+  }
+}
+
+function clearInventoryNotice() {
+  clearInventoryNoticeTimer()
+  inventoryNotice.value = ''
+}
+
+function showInventoryNotice(message: string) {
+  clearInventoryNoticeTimer()
+  inventoryNotice.value = message
+  inventoryNoticeClearTimer = setTimeout(() => {
+    inventoryNotice.value = ''
+    inventoryNoticeClearTimer = null
+  }, 2600)
 }
 
 function resetFeedbackPanelState(options: { clearDrafts?: boolean } = {}) {
@@ -979,7 +1002,7 @@ function addInventoryOption(option: MerchantInventoryOption) {
     latestQuantity: inventoryOptionLatestQuantity(option),
     has_active_application: option.has_active_application,
   })
-  inventoryNotice.value = ''
+  clearInventoryNotice()
   inventoryError.value = ''
   inventorySearch.value = ''
   focusInventoryQuantityInput(rowKey)
@@ -1095,7 +1118,7 @@ async function submitInventorySnapshot() {
     return
   }
 
-  inventoryNotice.value = ''
+  clearInventoryNotice()
   inventoryError.value = ''
   if (inventoryRows.value.length === 0) {
     inventoryError.value = '请先选机器'
@@ -1129,7 +1152,7 @@ async function submitInventorySnapshot() {
         option.latest_quantity = submitted.quantity
       }
     }
-    inventoryNotice.value = `预览已提交 ${items.length} 台机器库存`
+    showInventoryNotice(`预览已提交 ${items.length} 台机器库存`)
     inventoryRows.value = []
     focusInventorySearchInput()
     return
@@ -1138,7 +1161,7 @@ async function submitInventorySnapshot() {
   inventorySubmitting.value = true
   try {
     const result = await api.submitInventorySnapshot(items)
-    inventoryNotice.value = `已提交 ${result.items.length || items.length} 台机器库存`
+    showInventoryNotice(`已提交 ${result.items.length || items.length} 台机器库存`)
     inventoryRows.value = []
     await refreshInventoryOptions()
     focusInventorySearchInput()
@@ -1584,7 +1607,7 @@ function finishSubmittedProductApplication(applicationType: 'existing_product' |
     feedbackNotice.value = ''
     feedbackError.value = ''
     inventoryError.value = ''
-    inventoryNotice.value = '已提交申请'
+    showInventoryNotice('已提交申请')
     focusInventorySearchInput()
     return
   }
@@ -2227,7 +2250,7 @@ function logout(reason: LogoutReason = 'manual') {
   inventoryRows.value = []
   inventorySearch.value = ''
   inventoryLoaded.value = false
-  inventoryNotice.value = ''
+  clearInventoryNotice()
   inventoryError.value = ''
   resetFeedbackPanelState({ clearDrafts: true })
   notificationsSummary.today_count = 0
