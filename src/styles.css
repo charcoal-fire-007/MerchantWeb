@@ -771,7 +771,7 @@ a:focus-visible,
   background: transparent;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(2px);
+  transform: translateX(1px);
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 .inventory-remove-row:hover {
