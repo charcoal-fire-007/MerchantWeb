@@ -875,9 +875,9 @@ a:focus-visible,
   border-radius: 0;
 }
 .inventory-feedback-section.is-quick .feedback-submit {
-  min-width: 80px;
+  min-width: 72px;
   min-height: 34px;
-  padding: 0 12px;
+  padding: 0 10px;
 }
 .inventory-feedback-actions {
   display: inline-flex;
