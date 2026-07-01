@@ -814,7 +814,7 @@ a:focus-visible,
   padding-top: 0;
 }
 .inventory-submit-footer .btn-primary {
-  width: min(48px, 100%);
+  width: min(44px, 100%);
   justify-self: end;
   min-height: 30px;
   border-radius: var(--radius-md);
