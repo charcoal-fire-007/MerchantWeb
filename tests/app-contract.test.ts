@@ -1016,7 +1016,8 @@ test('machine inventory page supports compact batch snapshot submission', () => 
   assert.doesNotMatch(inventoryRemoveRowRule, /transform:\s*translateX\(3px\)/)
   assert.match(cssRule('.inventory-remove-row:hover'), /background:\s*transparent/)
   const selectedInventoryRemoveRowRule = cssRule('.inventory-option-row.selected:hover .inventory-remove-row,\n.inventory-option-row.selected:focus-within .inventory-remove-row')
-  assert.match(selectedInventoryRemoveRowRule, /opacity:\s*0\.36/)
+  assert.match(selectedInventoryRemoveRowRule, /opacity:\s*0\.3(?:0)?/)
+  assert.doesNotMatch(selectedInventoryRemoveRowRule, /opacity:\s*0\.36/)
   assert.doesNotMatch(selectedInventoryRemoveRowRule, /opacity:\s*0\.44/)
   assert.doesNotMatch(selectedInventoryRemoveRowRule, /opacity:\s*0\.5(?:;|\s)/)
   assert.doesNotMatch(selectedInventoryRemoveRowRule, /opacity:\s*0\.58/)
@@ -1040,7 +1041,7 @@ test('machine inventory page supports compact batch snapshot submission', () => 
     '.inventory-option-row.selected:hover .inventory-remove-row,\n.inventory-option-row.selected:focus-within .inventory-remove-row'
   )
   assert.match(coarsePointerSelectedRemoveRowRule, /opacity:\s*0\.72/)
-  assert.doesNotMatch(coarsePointerSelectedRemoveRowRule, /opacity:\s*0\.36/)
+  assert.doesNotMatch(coarsePointerSelectedRemoveRowRule, /opacity:\s*0\.3(?:0)?/)
   assert.doesNotMatch(cssSource, /\.inventory-draft-empty/)
   assert.equal(cssRule('.inventory-empty-apply'), '')
   assert.equal(cssRule('.inventory-empty-action'), '')
