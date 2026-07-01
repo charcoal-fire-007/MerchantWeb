@@ -685,15 +685,15 @@ a:focus-visible,
   opacity: 0.4;
   box-shadow: 0 0 0 3px rgba(159,232,112,0.2);
 }
-.inventory-option-list { display: grid; gap: 2px; }
+.inventory-option-list { display: grid; gap: 1px; }
 .inventory-option-row {
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 2px;
+  gap: 1px;
   align-items: center;
-  padding: 2px 5px;
+  padding: 1px 4px;
   border: 0;
   border-bottom: 1px solid rgba(0,0,0,0.006);
   background: transparent;
@@ -730,11 +730,11 @@ a:focus-visible,
   background: rgba(254,226,226,0.32);
 }
 .inventory-quantity-field { display: block; position: relative; }
-.inventory-inline-quantity { grid-column: 2; width: 56px; }
+.inventory-inline-quantity { grid-column: 2; width: 52px; }
 .inventory-quantity-field input {
   width: 100%;
-  min-height: 26px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 7px;
   border: 1px solid rgba(0,0,0,0.014);
   border-radius: calc(var(--radius-md) - 4px);
   background: rgba(255,255,255,0.14);
