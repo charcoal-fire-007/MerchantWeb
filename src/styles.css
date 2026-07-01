@@ -729,7 +729,7 @@ a:focus-visible,
   background: rgba(254,226,226,0.32);
 }
 .inventory-quantity-field { display: block; position: relative; }
-.inventory-inline-quantity { grid-column: 2; width: 48px; }
+.inventory-inline-quantity { grid-column: 2; width: 44px; }
 .inventory-quantity-field input {
   width: 100%;
   min-height: 22px;
