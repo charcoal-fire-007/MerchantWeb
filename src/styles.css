@@ -643,8 +643,8 @@ a:focus-visible,
 }
 .inventory-picker-toolbar input {
   width: 100%;
-  min-height: 30px;
-  padding: 0 28px 0 8px;
+  min-height: 28px;
+  padding: 0 24px 0 7px;
   border: 1px solid rgba(0,0,0,0.014);
   border-radius: var(--radius-md);
   background: rgba(255,255,255,0.14);
@@ -1503,6 +1503,10 @@ a:focus-visible,
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     align-items: center;
+  }
+  .inventory-picker-toolbar input {
+    min-height: 30px;
+    padding: 0 28px 0 8px;
   }
   .inventory-option-row {
     min-height: 42px;
