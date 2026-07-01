@@ -620,7 +620,7 @@ a:focus-visible,
 .inventory-page { display: grid; gap: 6px; }
 .inventory-layout {
   display: grid;
-  grid-template-columns: minmax(0, 584px);
+  grid-template-columns: minmax(0, 560px);
   gap: 8px;
   align-items: start;
   justify-content: center;
@@ -688,12 +688,12 @@ a:focus-visible,
 .inventory-option-list { display: grid; gap: 1px; }
 .inventory-option-row {
   width: 100%;
-  min-height: 28px;
+  min-height: 26px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 1px;
   align-items: center;
-  padding: 1px 4px;
+  padding: 0 3px;
   border: 0;
   border-bottom: 1px solid rgba(0,0,0,0.006);
   background: transparent;
