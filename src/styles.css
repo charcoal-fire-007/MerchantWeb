@@ -903,12 +903,12 @@ a:focus-visible,
   min-width: 24px;
   height: 24px;
   min-height: 24px;
-  opacity: 0.32;
+  opacity: 0.26;
   transition: opacity 0.14s ease;
 }
 .inventory-feedback-section.is-quick:hover .inventory-feedback-close,
 .inventory-feedback-section.is-quick:focus-within .inventory-feedback-close {
-  opacity: 0.56;
+  opacity: 0.48;
 }
 
 .feedback-tabs {
