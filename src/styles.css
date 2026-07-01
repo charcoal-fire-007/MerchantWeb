@@ -688,7 +688,7 @@ a:focus-visible,
 .inventory-option-list { display: grid; gap: 1px; }
 .inventory-option-row {
   width: 100%;
-  min-height: 30px;
+  min-height: 28px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 1px;
