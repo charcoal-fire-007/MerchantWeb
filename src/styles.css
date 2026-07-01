@@ -685,7 +685,7 @@ a:focus-visible,
   opacity: 0.4;
   box-shadow: 0 0 0 3px rgba(159,232,112,0.2);
 }
-.inventory-option-list { display: grid; gap: 1px; }
+.inventory-option-list { display: grid; gap: 0; }
 .inventory-option-row {
   width: 100%;
   min-height: 26px;
@@ -695,7 +695,6 @@ a:focus-visible,
   align-items: center;
   padding: 0 3px;
   border: 0;
-  border-bottom: 1px solid rgba(0,0,0,0.006);
   background: transparent;
   color: var(--ink);
   text-align: left;
