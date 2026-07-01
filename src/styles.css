@@ -671,14 +671,18 @@ a:focus-visible,
   justify-content: center;
   border-radius: calc(var(--radius-md) - 3px);
   color: var(--positive-deep);
-  opacity: 0.28;
+  opacity: 0.22;
   font-size: 12px;
   font-weight: 400;
   line-height: 1;
   cursor: pointer;
 }
+.inventory-search-apply:hover {
+  opacity: 0.4;
+}
 .inventory-search-apply:focus-visible {
   outline: none;
+  opacity: 0.4;
   box-shadow: 0 0 0 3px rgba(159,232,112,0.2);
 }
 .inventory-option-list { display: grid; gap: 2px; }
@@ -786,6 +790,7 @@ a:focus-visible,
     min-width: 24px;
     height: 24px;
     min-height: 24px;
+    opacity: 0.5;
   }
   .inventory-remove-row {
     width: 28px;
