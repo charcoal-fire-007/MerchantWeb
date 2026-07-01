@@ -671,7 +671,7 @@ a:focus-visible,
   justify-content: center;
   border-radius: calc(var(--radius-md) - 3px);
   color: var(--positive-deep);
-  opacity: 0.32;
+  opacity: 0.28;
   font-size: 12px;
   font-weight: 400;
   line-height: 1;
