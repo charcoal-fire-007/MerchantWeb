@@ -644,7 +644,7 @@ a:focus-visible,
 .inventory-picker-toolbar input {
   width: 100%;
   min-height: 30px;
-  padding: 0 30px 0 8px;
+  padding: 0 28px 0 8px;
   border: 1px solid rgba(0,0,0,0.014);
   border-radius: var(--radius-md);
   background: rgba(255,255,255,0.24);
@@ -658,21 +658,21 @@ a:focus-visible,
 }
 .inventory-search-apply {
   position: absolute;
-  right: 6px;
+  right: 7px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  min-height: 18px;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: calc(var(--radius-md) - 3px);
   color: var(--positive-deep);
-  opacity: 0.44;
-  font-size: 13px;
+  opacity: 0.36;
+  font-size: 12px;
   font-weight: 400;
   line-height: 1;
   cursor: pointer;
