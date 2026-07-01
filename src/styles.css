@@ -814,9 +814,9 @@ a:focus-visible,
   padding-top: 0;
 }
 .inventory-submit-footer .btn-primary {
-  width: min(52px, 100%);
+  width: min(48px, 100%);
   justify-self: end;
-  min-height: 32px;
+  min-height: 30px;
   border-radius: var(--radius-md);
 }
 .inventory-empty {
@@ -1511,7 +1511,7 @@ a:focus-visible,
   }
   .inventory-quantity-field input { min-height: 30px; }
   .inventory-inline-quantity { width: 68px; }
-  .inventory-submit-footer > .btn-primary { width: 100%; }
+  .inventory-submit-footer > .btn-primary { width: 100%; min-height: 32px; }
   .inventory-feedback-section { margin-top: 10px; }
   .inventory-feedback-strip {
     align-items: center;
