@@ -710,7 +710,7 @@ a:focus-visible,
   box-shadow: 0 0 0 3px rgba(159,232,112,0.2);
 }
 .inventory-option-row.selected {
-  background: rgba(159,232,112,0.032);
+  background: rgba(159,232,112,0.018);
   opacity: 1;
   transform: none;
 }
