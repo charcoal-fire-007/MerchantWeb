@@ -816,7 +816,7 @@ a:focus-visible,
 .inventory-submit-footer .btn-primary {
   width: min(44px, 100%);
   justify-self: end;
-  min-height: 30px;
+  min-height: 28px;
   border-radius: var(--radius-md);
 }
 .inventory-empty {
