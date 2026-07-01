@@ -777,7 +777,7 @@ a:focus-visible,
 }
 .inventory-option-row.selected:hover .inventory-remove-row,
 .inventory-option-row.selected:focus-within .inventory-remove-row {
-  opacity: 0.3;
+  opacity: 0.26;
   pointer-events: auto;
 }
 @media (hover: none), (pointer: coarse) {
